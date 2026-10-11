@@ -14,6 +14,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "rack-generator/**/*.ts", "vite.config.ts"],
-  "exclude": ["node_modules", "dist", "public"]
+  "include": ["src", "rack-generator/**/*.ts", "server", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "public", "server/backend-main.ts", "server/backend-modules.ts", "server/backend-modules.test.ts"]
 }

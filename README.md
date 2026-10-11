@@ -9,6 +9,40 @@ Design a squat rack, then the whole gym around it, in the browser. Every part is
 
 ---
 
+## Studio workspace
+
+The home page is now your gym dashboard. Create a home or commercial gym in three steps: name it, set room
+dimensions in meters or feet, and choose an empty room or a strength starter. New gyms open at `/builder?design=<id>`
+and autosave their document and editing history in this browser. Existing saved configurations appear on the dashboard
+too. Search, rename, duplicate, delete, and undo the latest deletion from the design cards.
+
+An empty room keeps the rack structure available to restore through the builder's rack starting points. Changing a
+rack starting point keeps the room dimensions. The strength starter includes a rack, REP flat bench, and plate tree
+and requires at least 4 × 4 m. The previous `/?gym=<slug>` gallery links still work.
+
+Studio supports guest browser storage and signed-in cloud workspaces through the separate NestJS backend
+and PostgreSQL. Create an account, confirm your email, and save gyms and custom equipment across devices.
+Guest designs can be explicitly imported into your account. Offline edits remain locally cached and stale
+cloud writes surface a conflict instead of silently replacing another device's work. Export JSON for a backup.
+See [Coolify and PostgreSQL deployment](docs/self-hosting.md) for the Dockerfile, database, and SMTP setup.
+
+Local startup: run `npm run dev` here and `npm run dev` in the Desktop `gym-studio-backend` folder
+(or `npm run dev:studio` here). Open `http://127.0.0.1:5173/account`. No database installation or AI key is
+needed for the labelled equipment demo. The backend stores local data persistently and provides a recovery-email
+inbox at `http://127.0.0.1:8788/dev/inbox`. Real photo recognition uses a server-side OpenRouter or Anthropic key.
+See [MVP implementation and launch checklist](docs/mvp-plan.md).
+
+The equipment library supports searching the catalog, creating equipment from shape templates, editing parameters,
+and saving named custom equipment. Saved equipment can be edited, duplicated, deleted with Undo, and added to a
+chosen gym. Equipment placed in a gym is an independent copy, so later library changes do not change saved designs.
+The Templates page uses the same Studio navigation. Search by gym or equipment, inspect a template's equipment list,
+then choose **Use template** to create an independent dashboard gym with autosave immediately.
+
+The builder's gym status panel shows whether changes are saved, still saving, or retained as a recovery draft.
+Open it to save a template or recovered draft as an autosaving gym, retry a failed save, or download a JSON backup.
+Recovering a draft offers Undo to restore the previous design and its history. Browser storage commits pending edits
+immediately on page hide or close, including an in-progress drag; asynchronous storage adapters keep queued writes.
+
 ## Start from a real gym
 
 Eleven real home and garage gyms, recreated piece by piece from [Gym Radar](https://gymradar.com) and gym tours. Open
@@ -97,6 +131,13 @@ Bambu Studio or OrcaSlicer. See [docs/print-export.md](docs/print-export.md).
 Browse every part at [/library](https://gym.wesbos.com/library), then open any part to tweak its parameters on its own
 and export it.
 
+Customize a part in its viewer, give it a name, and choose **Save custom part**. Saved presets appear under **My custom
+parts** in the library and in the builder's parts gallery. Choose **Add to gym** to place a copy with those settings.
+Use **Edit** to update a preset or save a new copy, and **Delete** to remove it from your collection. Presets are saved
+in this browser; they do not sync between devices. Placed copies keep their settings in the gym document, including
+JSON exports and undo/redo, even if the original preset is later edited or deleted. Rack connections still follow
+the builder's fit rules; incompatible dimensions are rejected with an explanation during placement.
+
 ![The parts library grid](docs/readme/library.jpg)
 
 ![The part viewer showing a Bells of Steel cable tower with its loading, pin and carriage options](docs/readme/part-viewer.jpg)
@@ -124,7 +165,7 @@ npm run dev          # Vite dev server on 127.0.0.1
 npm test             # unit tests (node:test via tsx)
 npm run typecheck
 npm run build        # typecheck + production build
-npm run deploy       # build + wrangler deploy (Cloudflare)
+npm run deploy       # prints the two-service Coolify deployment instructions
 ```
 
 - **Stack:** React 19, TanStack Router, three.js, Vite, Cloudflare Workers static assets.

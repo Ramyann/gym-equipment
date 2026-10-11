@@ -28,6 +28,9 @@ export function resetRackWithUndo(store: BuilderStore, afterReset?: () => void) 
 export function clearHistoryWithUndo(store: BuilderStore) {
   return withCheckpoint(store, 'History cleared', () => store.clearHistory());
 }
+export function recoverDraftWithUndo(store: BuilderStore) {
+  return withCheckpoint(store, 'Draft recovered', () => store.recoverDraft());
+}
 /** Opening a gallery gym replaces the working design and its history; Undo brings the previous design back. */
 export async function openDesignWithUndo(store: BuilderStore, open: () => Promise<unknown>, title: string) {
   const checkpoint = store.checkpoint();

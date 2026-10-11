@@ -1,3 +1,7 @@
+import type { CustomPart } from './custom-parts.ts';
+import { workspaceStorage } from './workspace-storage.ts';
+import { customChanges } from './custom-parts.ts';
+import { customizeProposal } from './custom-placement.ts';
 import { DocumentHistory, cleanDocument, diffDocuments, applyOps, parseSession, describeChange, sameValue, type TimelineData, type TimelineSnapshot, type HistoryMetadata, type HistoryMark, type HistoryEntry, type SessionDocument } from './history.ts';
 import { systemProposal } from '../../rack-generator/system-proposal.ts';
 import { isSystemPart, SYSTEM_DEFAULTS, type SystemPartId } from '../../rack-generator/system-types.ts';
@@ -58,6 +62,8 @@ export interface BuilderSnapshot {
   draftAvailable: boolean;
   storageReady: boolean;
   storageError: string | null;
+  storageSaving: boolean;
+  draftSaved: boolean;
   doc: RackDoc;
   resolved: ResolvedInstance[];
   selection: readonly PhysicalInstanceId[];
@@ -112,6 +118,7 @@ export class BuilderStore {
     draft: null,
   };
   private writes: Promise<void> = Promise.resolve();
+  private pendingWrites = 0;
   private storageReadable = true;
   private draftQueued = false;
   private draftDue = false;
@@ -127,10 +134,11 @@ export class BuilderStore {
   private pendingEntries: { base: readonly HistoryEntry[]; entry: HistoryEntry; entries: readonly HistoryEntry[] } | null = null;
   /** resolveAssembly results already computed for immutable working documents. */
   private resolvedFor = new WeakMap<RackDoc, ResolvedInstance[]>();
+  private customPreset: CustomPart | null = null;
   readonly ready: Promise<void>;
-  constructor(storage?: StorageLike | ConfigStorage) {
+  constructor(storage?: StorageLike | ConfigStorage, initialId?: string, lifecycle = true) {
     this.repository =
-      storage && "read" in storage ? storage : new LocalConfigStorage(storage);
+      storage && "read" in storage && "write" in storage ? storage : new LocalConfigStorage(storage as StorageLike | undefined);
     const doc = createAssembly(),
       status = "Preparing your workspace…",
       error = false;
@@ -143,6 +151,8 @@ export class BuilderStore {
       draftAvailable: false,
       storageReady: false,
       storageError: null,
+      storageSaving: false,
+      draftSaved: false,
       doc,
       resolved: resolveAssembly(doc),
       selection: [],
@@ -176,16 +186,17 @@ export class BuilderStore {
       .then((collection) => {
         this.collection = collection;
         const saved = collection.configs.find(
-          (c) => c.id === collection.activeId,
+          (c) => c.id === (initialId ?? collection.activeId),
         );
         this.patch({
           configs: collection.configs,
-          activeId: collection.activeId,
+          activeId: saved?.id ?? null,
           draftAvailable: !!collection.draft,
           storageReady: true,
         });
         if (!this.state.dirty && saved)
           this.replaceWorking(saved.doc, saved.timeline);
+        if (initialId && !saved) this.status('This saved gym could not be found. Return to your workspace to choose a design.', true);
       })
       .catch(() => {
         this.storageReadable = false;
@@ -197,14 +208,20 @@ export class BuilderStore {
           error: true,
         });
       });
-    // The draft is debounced, so write it before the page goes away.
+    if (lifecycle) this.watchLifecycle();
+  }
+  /** React pages attach this in their effect so remounts do not retain old stores. */
+  watchLifecycle = () => {
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       const flush = () => this.flushDraft(true);
+      const hidden = () => { if (document.visibilityState === "hidden") flush(); };
       window.addEventListener("pagehide", flush);
       window.addEventListener("beforeunload", flush);
-      if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+      if (typeof document !== "undefined") document.addEventListener("visibilitychange", hidden);
+      return () => { this.flushDraft(true); window.removeEventListener('pagehide', flush); window.removeEventListener('beforeunload', flush); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', hidden); };
     }
-  }
+    return () => {};
+  };
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -231,10 +248,18 @@ export class BuilderStore {
         const piece = this.state.resolved.find(r => r.id === this.state.placing!.physicalId);
         if (item && piece?.mount) target = { ...piece.mount, ...item.target } as Mount;
       }
-      const result = target ? this.mountProposal(target, patch.paired) : suggestPlacement(doc, part, patch.paired, movingId);
+      const result = target ? this.mountProposal(target, patch.paired) : suggestPlacement(doc, part, patch.paired, movingId, this.placementParams());
       patch = { ...patch, proposal: result.proposal, placementText: result.proposal ? `Suggested: ${result.proposal.label}` : `Doesn't fit: ${result.reason}` };
     }
     if (patch.doc || patch.structureMode !== undefined && !("proposal" in patch) || patch.placing === null && patch.structureChoice === null && !patch.systemChoice) patch.proposal = null;
+    if (patch.proposal && this.customPreset) {
+      try { patch.proposal = customizeProposal(patch.proposal, this.customPreset); }
+      catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        patch = { ...patch, proposal: null, placementText: reason, status: reason, error: true };
+      }
+    }
+    if (patch.doc || patch.placing === null && patch.structureChoice === null && !patch.systemChoice) this.customPreset = null;
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((fn) => fn());
   };
@@ -249,6 +274,22 @@ export class BuilderStore {
   private mutateStorage(
     update: (current: ConfigCollection) => ConfigCollection,
   ) {
+    // Local storage is synchronous: commit now when ready, particularly on pagehide.
+    // Async adapters and operations queued before initialization keep their serial order.
+    if (this.repository.writeNow && this.state.storageReady && !this.pendingWrites) {
+      try {
+        if (!this.storageReadable) throw new Error('Saved storage could not be read. Export your design as JSON.');
+        const next = update(this.collection);
+        this.repository.writeNow(structuredClone(next));
+        this.acceptCollection(next);
+        return Promise.resolve();
+      } catch (error) {
+        this.storageFailed();
+        return Promise.reject(error);
+      }
+    }
+    this.pendingWrites++;
+    this.patch({ storageSaving: true });
     const operation = this.writes.then(async () => {
       await this.ready;
       if (!this.storageReadable)
@@ -257,17 +298,29 @@ export class BuilderStore {
         );
       const next = update(this.collection);
       await this.repository.write(structuredClone(next));
-      this.collection = next;
-      this.patch({ configs: next.configs, storageError: null });
+      this.acceptCollection(next);
     });
-    this.writes = operation.catch(() => {
-      this.patch({
-        storageError: "Browser storage failed. Save your design as JSON.",
-      });
-      this.status("Browser storage failed. Save your design as JSON.", true);
+    const completed = operation.finally(() => {
+      this.pendingWrites--;
+      this.patch({ storageSaving: this.pendingWrites > 0 });
     });
-    return operation;
+    this.writes = completed.catch(() => this.storageFailed());
+    return completed;
   }
+  private acceptCollection(next: ConfigCollection) {
+    this.collection = next;
+    this.patch({ configs: next.configs, storageError: null, draftSaved: !!next.draft && sameValue(next.draft, this.committedDoc()) && sameValue(next.draftTimeline, this.journal.data) });
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event('gym-designs-changed'));
+  }
+  private storageFailed() {
+    const message = 'Your latest changes could not be saved. Save your design as JSON or retry.';
+    this.patch({ storageError: message });
+    this.status(message, true);
+  }
+  retryStorage = async () => {
+    this.draftDue = true;
+    await this.flushStorage();
+  };
   /** Await pending storage work, useful for adapters and lifecycle tests. */
   flushStorage = async () => {
     this.flushDraft(true);
@@ -287,7 +340,7 @@ export class BuilderStore {
     return !saved || !sameValue(saved.doc, this.committedDoc()) || !sameValue(saved.timeline, this.journal.data);
   }
   private autosave() {
-    this.patch({ dirty: this.isDirty(), draftAvailable: false });
+    this.patch({ dirty: this.isDirty(), draftAvailable: false, draftSaved: false });
     this.scheduleDraft();
   }
   private cancelDraftTimers() {
@@ -320,12 +373,14 @@ export class BuilderStore {
       // Read the working copy at write time so queued edits coalesce into one write.
       this.draftQueued = false;
       const dirty = this.isDirty();
+      const active = current.configs.find(c => c.id === this.state.activeId);
+      if (active?.gym) return dirty ? { ...current, activeId: active.id, configs: current.configs.map(c => c.id === active.id ? { ...c, doc: cleanDocument(this.committedDoc()), timeline: structuredClone(this.journal.data), gym: { ...active.gym!, updatedAt: Date.now() } } : c) } : current;
       return { ...current, draft: dirty ? this.committedDoc() : null, draftTimeline: dirty ? structuredClone(this.journal.data) : undefined };
-    }).catch(() => {
+    }).then(() => this.patch({ dirty: this.isDirty() })).catch(() => {
       this.draftQueued = false;
     });
   }
-  save = async (name: string, duplicate = false) => {
+  save = async (name: string, duplicate = false, asGym = false) => {
     if (!name.trim()) throw new Error("Enter a configuration name.");
     this.endGesture();
     const doc = cleanDocument(this.appliedDoc), timeline = structuredClone(this.journal.data);
@@ -334,24 +389,31 @@ export class BuilderStore {
         ? this.state.activeId
         : crypto.randomUUID();
     await this.mutateStorage((current) => {
-      const config = { id, name: name.trim(), doc, timeline };
+      const previous = current.configs.find(c => c.id === this.state.activeId);
+      const now = Date.now();
+      const gym = previous?.gym ?? (asGym ? { type: 'home' as const, client: '', createdAt: now, updatedAt: now } : undefined);
+      const config = { id, name: name.trim(), doc, timeline, ...(gym ? { gym: { ...gym, updatedAt: now, ...(duplicate ? { createdAt: now } : {}) } } : {}) };
+      const preserveDraft = !!previous?.gym || (asGym && !!current.draft && !sameValue(current.draft, doc));
       return {
         configs: [...current.configs.filter((c) => c.id !== id), config],
         activeId: id,
-        draft: null,
+        draft: preserveDraft ? current.draft : null,
+        ...(preserveDraft && current.draftTimeline ? { draftTimeline: current.draftTimeline } : {}),
       };
     });
     this.patch({
       activeId: id,
       dirty: !sameValue(this.appliedDoc, doc) || !sameValue(this.journal.data, timeline),
-      draftAvailable: false,
+      draftAvailable: !!this.collection.draft,
     });
     // A draft queued before this save may have absorbed edits made after the
     // save-time snapshot. Restore the latest working copy after clearing it.
     if (this.state.dirty) this.autosave();
   };
+  /** Save an imported, template, or recovered design as an autosaving dashboard gym. */
+  saveGym = (name: string) => this.save(name, false, true);
   load = async (id: string) => {
-    await this.ready;
+    await this.flushStorage();
     const config = this.collection.configs.find((c) => c.id === id);
     if (!config) throw new Error("Configuration not found.");
     await this.mutateStorage((current) => ({ ...current, activeId: id }));
@@ -390,6 +452,7 @@ export class BuilderStore {
   };
   recoverDraft = () => {
     if (this.collection.draft) {
+      if (this.collection.configs.find(c=>c.id===this.state.activeId)?.gym) this.patch({activeId:null});
       this.replaceWorking(this.collection.draft, this.collection.draftTimeline);
       this.autosave();
       this.patch({ draftAvailable: false });
@@ -692,7 +755,7 @@ export class BuilderStore {
       const { doc, movingId } = this.placementContext(paired);
       const angle = this.state.placing?.rotation;
       const base = movingId && angle !== undefined ? setAccessoryRotation(doc, movingId, angle) : doc;
-      const proposal = proposalAt(base, this.state.placing!.part, target, paired, movingId);
+      const proposal = proposalAt(base, this.state.placing!.part, target, paired, movingId, this.placementParams());
       const reason = proposalCollision(resolveAssembly(proposal.doc), proposal);
       return { proposal: reason ? null : proposal, reason: reason ?? '' };
     } catch (error) { return { proposal: null, reason: (error as Error).message }; }
@@ -778,9 +841,35 @@ export class BuilderStore {
     this.patch({ systemParams, proposal: result.proposal,
       placementText: result.proposal ? `Suggested: ${result.proposal.label}` : `Doesn't fit: ${result.reason}` });
   };
-  cancelPlacement = () => this.patch({ placing: null, structureChoice: null });
-  startPlacement = (part: PartId, movingId: string | null = null, physicalId = this.state.selected ?? undefined) => {
+  cancelPlacement = () => {
+    this.customPreset = null;
+    this.patch({ placing: null, structureChoice: null, systemChoice: null });
+  };
+  startCustomPlacement = (preset: CustomPart): boolean => {
+    try {
+      const definition = this.state.definitions.find(d => d.id === preset.part);
+      if (!definition) throw Error('This part is unavailable. Wait for the catalog to load.');
+      if (Object.keys(preset.params).some(key => !Object.hasOwn(definition.defaults, key))) throw Error('This preset contains unsupported settings. Edit it in the library.');
+      this.cancelPlacement();
+      this.startPlacement(preset.part, null, undefined, preset);
+      if (this.state.systemChoice) {
+        this.previewSystem(customChanges(preset));
+        this.customPreset = null;
+      }
+      if (!this.state.proposal && !this.state.structureChoice) throw Error(this.state.placementText || this.state.status);
+      this.status(`Placing ${preset.name}`);
+      return true;
+    } catch (error) {
+      this.customPreset = null;
+      this.cancelPlacement();
+      this.status(error instanceof Error ? error.message : String(error), true);
+      return false;
+    }
+  };
+  placementParams = () => this.customPreset ? customChanges(this.customPreset) : undefined;
+  startPlacement = (part: PartId, movingId: string | null = null, physicalId = this.state.selected ?? undefined, preset?: CustomPart) => {
     if (this.state.timeline.viewing) this.latestHistory();
+    this.customPreset = preset ? structuredClone(preset) : null;
     if (isSystemPart(part)) {
       const result = systemProposal(this.state.doc, part);
       this.patch({ selected: null, placing: null, structureChoice: null, systemChoice: part, systemParams: { ...SYSTEM_DEFAULTS[part] },
@@ -812,7 +901,7 @@ export class BuilderStore {
     }
     // Each new placement starts from the part's own default, not the last choice.
     const paired = movingId ? this.state.doc.accessories.find(a => a.id === movingId)?.paired ?? false : pairedByDefault(part, this.state.doc);
-    const result = suggestPlacement(this.state.doc, part, paired, movingId);
+    const result = suggestPlacement(this.state.doc, part, paired, movingId, this.placementParams());
     const info = getPartPlacementInfo(part, this.state.doc);
     const structural = part === 'upright' || !!info?.slots?.length;
     this.patch({ selected: null, placing: structural ? null : { part, movingId, physicalId, rotation: this.state.doc.accessories.find(a => a.id === movingId)?.rotation }, structureChoice: structural ? part : null,
@@ -828,7 +917,7 @@ export class BuilderStore {
   /** Staged floor ghost: the moving item, or a fresh unit (plus its pair for pairable parts). Parking parts
    * (barbells) start in the suggested free cradle and fall back to the floor. */
   private floorProposal(part: PartId, movingId: string | null, paired = this.state.paired) {
-    const doc = movingId ? structuredClone(this.state.doc) : addFloorItem(this.state.doc, part, undefined, paired);
+    const doc = movingId ? structuredClone(this.state.doc) : addFloorItem(this.state.doc, part, undefined, paired, this.placementParams());
     const items = movingId ? doc.floorItems!.filter(i=>i.id===movingId) : doc.floorItems!.slice(this.state.doc.floorItems?.length ?? 0);
     const parks = parksInCradles(part), cradle = parks && !movingId ? suggestCradle(freeCradles(this.state.resolved, doc.floorItems, items[0].id)) : null;
     if (cradle) this.parkItem(items[0], cradle);
@@ -865,7 +954,7 @@ export class BuilderStore {
   };
   /** Staged wall ghost: the moving item, or a fresh one at its suggested spot beside the rack. */
   private wallProposal(part: PartId, movingId: string | null) {
-    const doc = movingId ? structuredClone(this.state.doc) : addWallItem(this.state.doc, part);
+    const doc = movingId ? structuredClone(this.state.doc) : addWallItem(this.state.doc, part, undefined, this.placementParams());
     const item = movingId ? doc.wallItems!.find(i=>i.id===movingId)! : doc.wallItems!.at(-1)!;
     return { proposal:{doc,entries:this.wallEntries(doc,item.id),ownerId:item.id,label:'Wall placement'}, placementText:'Click a wall to place · Alt disables snap · ESC cancels' };
   }
@@ -997,10 +1086,10 @@ export function toggled(list: readonly string[], ids: readonly string[], on?: bo
   for (const id of changed) { if (add) set.add(id); else set.delete(id); }
   return [...set];
 }
-export function getBuilderStore() {
+export function getBuilderStore(initialId?: string) {
   let storage: StorageLike | undefined;
   try {
-    storage = window.localStorage;
+    storage = workspaceStorage();
   } catch {}
-  return new BuilderStore(storage);
+  return new BuilderStore(storage, initialId, false);
 }

@@ -1,7 +1,7 @@
 /** Catalog sections: the sidebar headings and library categories that floor, wall and hang parts file under.
  * Order here is sidebar order. A part picks one with `section` in its define*Part spec; the part's
  * PartDefinition.category is its section, so the library groups the same way. */
-export const FLOOR_SECTIONS = ['Benches', 'Barbells', 'Dumbbells', 'Kettlebells', 'Plates', 'Machines', 'Cardio', 'Strongman', 'Floor storage', 'Accessories', 'Room decor'] as const;
+export const FLOOR_SECTIONS = ['Benches', 'Barbells', 'Dumbbells', 'Kettlebells', 'Plates', 'Machines', 'Cardio', 'Strongman', 'Floor storage', 'Accessories', 'Room decor', 'Custom templates'] as const;
 export const WALL_SECTIONS = ['Wall storage', 'Wall decor'] as const;
 export const HANG_SECTIONS = ['Cable attachments', 'Hanging accessories'] as const;
 /** Brand attachments that mount on the rack itself (rack-registry.ts, #131). */

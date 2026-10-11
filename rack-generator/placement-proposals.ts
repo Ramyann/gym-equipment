@@ -40,8 +40,8 @@ function proposalParams(doc: RackDoc, part: PartId, movingId: string | null): Nu
   return part === 'safety-pin-pipe' ? { pinDiameter: partDefaults(doc, part).pinDiameter } : {};
 }
 /** Mount enumeration must validate the same profile defaults as the eventual preview. */
-export function placementMounts(doc: RackDoc, part: PartId, movingId: string | null = null): Mount[] {
-  return getMounts(doc, part, proposalParams(doc, part, movingId));
+export function placementMounts(doc: RackDoc, part: PartId, movingId: string | null = null, params?: NumericParams): Mount[] {
+  return getMounts(doc, part, { ...proposalParams(doc, part, movingId), ...params });
 }
 /** Strip renderer metadata, retaining all domain target fields (including future target kinds). */
 type DomainTarget<T> = T extends Mount ? Omit<T, 'position' | 'center' | 'localAnchor' | 'pinAxis' | 'label' | 'connectorId' | 'hostId'> : never;
@@ -50,10 +50,10 @@ export function placementTarget<T extends Mount>(target: T): DomainTarget<T> {
   return structuredClone(domainTarget) as DomainTarget<T>;
 }
 /** Pure preview document adapter, also usable by swap/hover callers. */
-export function proposalAt(doc: RackDoc, part: PartId, target: Mount, paired: boolean, movingId: string | null = null): PlacementProposal {
+export function proposalAt(doc: RackDoc, part: PartId, target: Mount, paired: boolean, movingId: string | null = null, params?: NumericParams): PlacementProposal {
   const info = getPartPlacementInfo(part, doc)!, domainTarget = placementTarget(target);
   const next = movingId ? moveAccessory(doc, movingId, domainTarget, paired)
-    : addAccessory(doc, part, domainTarget, false, proposalParams(doc, part, null));
+    : addAccessory(doc, part, domainTarget, false, { ...proposalParams(doc, part, null), ...params });
   const accessory = movingId ? next.accessories.find(a => a.id === movingId)! : next.accessories.at(-1)!;
   accessory.target = { ...domainTarget, ...accessory.target };
   accessory.paired = !!info.paired && paired;
@@ -82,11 +82,11 @@ export function structureProposalAt(doc: RackDoc, part: PartId, slot: string): P
   if (!candidate.valid) throw new Error(candidate.reason);
   return { ...candidate, label: slot.replaceAll('-', ' ') };
 }
-export function suggestPlacement(doc: RackDoc, part: PartId, paired = pairedByDefault(part, doc), movingId: string | null = null): ProposalResult {
+export function suggestPlacement(doc: RackDoc, part: PartId, paired = pairedByDefault(part, doc), movingId: string | null = null, params?: NumericParams): ProposalResult {
   const info = getPartPlacementInfo(part, doc), base = resolveAssembly(doc);
   let reason = 'No compatible mounting connection remains.', evaluated = 0;
   const structural = part === 'upright' || !!info?.slots?.length;
-  const mounts = structural ? [] : placementMounts(doc, part, movingId).sort((a,b) => scoreMount(doc,part,a)-scoreMount(doc,part,b));
+  const mounts = structural ? [] : placementMounts(doc, part, movingId, params).sort((a,b) => scoreMount(doc,part,a)-scoreMount(doc,part,b));
   const candidates = structural ? (info?.slots ?? []).filter(id => part !== 'upright' || doc.removed.includes(id)) : mounts;
   if (part === 'upright' && !candidates.length) reason = 'All uprights are present; extend the rack in Uprights & connections.';
   // No WASM or mesh builds: bounded transform/envelope checks after ranking.
@@ -96,7 +96,7 @@ export function suggestPlacement(doc: RackDoc, part: PartId, paired = pairedByDe
       let proposal: PlacementProposal;
       if (typeof candidate === 'string') {
         proposal = structureProposalAt(doc, part, candidate);
-      } else proposal = proposalAt(doc, part, candidate, paired, movingId);
+      } else proposal = proposalAt(doc, part, candidate, paired, movingId, params);
       const collision = proposalCollision(base, proposal);
       if (collision) { reason = collision; continue; }
       return { proposal, mounts, reason: '', evaluated };

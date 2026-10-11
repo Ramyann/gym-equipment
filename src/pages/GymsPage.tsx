@@ -1,18 +1,41 @@
+import { workspaceStorage } from '../state/workspace-storage.ts';
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { loadGym, loadGyms } from "../gyms/gyms.ts";
 import { gymPreviewUrl, sourceName, type GymEntry } from "../gyms/types.ts";
-import { GYM_PARAM } from "../gyms/useOpenGym.ts";
+import { LocalConfigStorage } from '../state/config-storage.ts';
+import { createGymFromTemplate } from '../state/gym-designs.ts';
+import { StudioSidebar } from '../components/StudioSidebar.tsx';
 import "../gyms/gyms.css";
+import './dashboard.css';
+import './studio-templates.css';
 
 const GYM_RADAR = "https://gymradar.com";
 
 function OpenInBuilder({ gym, className = "gym-open" }: { gym: GymEntry; className?: string }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  async function useTemplate() {
+    setBusy(true); setError('');
+    try {
+      const repo = new LocalConfigStorage(workspaceStorage());
+      const collection = await repo.read();
+      const design = createGymFromTemplate(gym.doc, gym.title);
+      await repo.write({ ...collection, configs: [...collection.configs, design], activeId: design.id });
+      window.dispatchEvent(new Event('gym-designs-changed'));
+      await navigate({ to: '/builder', search: { design: design.id } as never });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      setBusy(false);
+    }
+  }
   return (
-    <Link className={className} to="/" search={{ [GYM_PARAM]: gym.slug } as never}>
-      Open in builder
-    </Link>
+    <div className="template-use"><button className={className} disabled={busy} onClick={() => void useTemplate()}>{busy ? 'Creating gym…' : 'Use template →'}</button>{error && <p role="alert" className="dashboard-error">{error}</p>}</div>
   );
+}
+
+function TemplatesLayout({ children }: { children: ReactNode }) {
+  return <div className="studio-dashboard studio-templates"><StudioSidebar active="templates"/><main className="studio-main gyms-page"><div className="studio-breadcrumb">Workspace <span>/</span> <Link to="/gyms">Templates</Link></div>{children}</main></div>;
 }
 
 function OwnerCredit({ gym }: { gym: GymEntry }) {
@@ -70,15 +93,11 @@ function PageHeader({ children }: { children?: ReactNode }) {
   return (
     <header className="gyms-header">
       <div className="gyms-header-copy">
-        <p className="eyebrow">BOS STRENGTH / GYM GALLERY</p>
+        <p className="eyebrow">FIND YOUR STARTING POINT</p>
         {children}
       </div>
       <nav>
-        <Link to="/gyms">All gyms</Link>
-        <Link to="/library">Parts library</Link>
-        <Link className="gyms-header-primary" to="/">
-          Build a rack ↗
-        </Link>
+        <Link to="/">My gym designs</Link>
       </nav>
     </header>
   );
@@ -86,23 +105,26 @@ function PageHeader({ children }: { children?: ReactNode }) {
 
 export default function GymsPage() {
   const { gyms, error } = useGyms();
+  const [query, setQuery] = useState('');
+  const filtered = gyms?.filter(gym => `${gym.title} ${gym.summary} ${gym.equipment.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase()));
   return (
-    <main className="gyms-page">
+    <TemplatesLayout>
       <PageHeader>
-        <h1>Pre-built gyms</h1>
+        <h1>Gym templates</h1>
         <p>
           Real home and garage gyms from{" "}
           <a href={GYM_RADAR} target="_blank" rel="noreferrer">
             Gym Radar
           </a>{" "}
-          and gym tours, recreated piece by piece with the builder's catalog. Open one to remix it; your own design stays saved.
+          and gym tours. Choose a starting point, save your own copy, and make it yours.
         </p>
       </PageHeader>
+      <div className="template-search"><label htmlFor="template-search">Find your inspiration</label><input id="template-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search gyms or equipment…"/></div>
       <p role="status" className="gyms-status">
-        {error || (gyms ? `${gyms.length} gyms` : "Loading gyms…")}
+        {error || (filtered ? `${filtered.length} templates` : "Loading templates…")}
       </p>
       <div className="gyms-grid">
-        {gyms?.map((gym) => (
+        {filtered?.map((gym) => (
           <article className="gym-card" key={gym.slug}>
             <Link className="gym-card-image" to="/gyms/$slug" params={{ slug: gym.slug }} aria-label={`${gym.title} details`}>
               <img src={gymPreviewUrl(gym.slug)} alt={`3D render of ${gym.title}`} loading="lazy" width={1200} height={800} />
@@ -126,8 +148,9 @@ export default function GymsPage() {
           </article>
         ))}
       </div>
+      {filtered?.length === 0 && <div className="studio-empty"><h2>No templates match your search</h2><button className="secondary" onClick={() => setQuery('')}>Clear search</button></div>}
       <GalleryFooter />
-    </main>
+    </TemplatesLayout>
   );
 }
 
@@ -159,24 +182,24 @@ export function GymDetailPage() {
   }, [slug]);
   if (gym === undefined)
     return (
-      <main className="gyms-page">
+      <TemplatesLayout>
         <PageHeader />
         <p role="status" className="gyms-status">Loading gym…</p>
-      </main>
+      </TemplatesLayout>
     );
   if (!gym)
     return (
-      <main className="gyms-page">
+      <TemplatesLayout>
         <PageHeader>
           <h1>Gym not found</h1>
           <p>
             There's no gym called “{slug}” in the gallery. <Link to="/gyms">See all gyms</Link>.
           </p>
         </PageHeader>
-      </main>
+      </TemplatesLayout>
     );
   return (
-    <main className="gyms-page">
+    <TemplatesLayout>
       <PageHeader />
       <article className="gym-detail">
         <img className="gym-detail-image" src={gymPreviewUrl(gym.slug)} alt={`3D render of ${gym.title}`} width={1200} height={800} />
@@ -192,7 +215,7 @@ export function GymDetailPage() {
               See the real gym ↗
             </a>
           </div>
-          <p className="gym-note">Opens as a new unsaved design. Anything unsaved in the builder is kept as a saved configuration. The builder's address stays a shareable link to this gym until you change something.</p>
+          <p className="gym-note">Creates your own saved gym with autosave. Your other designs and recovery draft stay in your workspace.</p>
         </div>
         <section className="gym-equipment" aria-labelledby="equipment-heading">
           <h2 id="equipment-heading">Equipment</h2>
@@ -204,6 +227,6 @@ export function GymDetailPage() {
         </section>
       </article>
       <GalleryFooter />
-    </main>
+    </TemplatesLayout>
   );
 }

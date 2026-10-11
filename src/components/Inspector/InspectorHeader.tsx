@@ -18,7 +18,7 @@ export function InspectorHeader({ store, part, title, chip, subtitle, art, back 
   const section = chip === undefined ? meta?.section : chip;
   return <header className="insp-header">
     {back && <div className="insp-header-bar">
-      <button id="deselect" type="button" className="insp-back" onClick={() => store.select(null)}>← Rack settings</button>
+      <button id="deselect" type="button" className="insp-back" onClick={() => store.select(null)}>← Gym overview</button>
       <LockToggle store={store} />
     </div>}
     <div className="insp-hero">

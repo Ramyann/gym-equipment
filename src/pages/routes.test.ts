@@ -14,11 +14,17 @@ const redirectOf = (path: string, search: Record<string, unknown> = {}) => {
   }
 };
 
-test('the builder is home and legacy builder URLs land on it', () => {
+test('the dashboard is home and the builder has its own route', () => {
+  assert.equal(leaf('/account').routeId, '/account');
   assert.equal(leaf('/').routeId, '/');
   assert.equal(redirectOf('/'), undefined);
-  for (const path of ['/builder', '/builder.html', '/index.html']) assert.equal(redirectOf(path)?.to, '/', path);
-  assert.deepEqual(redirectOf('/builder', { layout: 'six' })?.search, { layout: 'six' });
+  assert.equal(redirectOf('/builder'), undefined);
+  assert.equal(leaf('/builder').routeId, '/builder');
+  assert.equal(redirectOf('/builder.html')?.to, '/builder');
+  assert.equal(redirectOf('/index.html')?.to, '/');
+  assert.equal(redirectOf('/index.html',{gym:'test'})?.to, '/builder');
+  assert.equal(redirectOf('/', {gym:'test'})?.to, '/builder');
+  assert.deepEqual(redirectOf('/', {gym:'test',layout:'six'})?.search, {gym:'test',layout:'six'});
 });
 
 test('parts live at real /parts/<id> paths; a bare /parts goes to the library', () => {

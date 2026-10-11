@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { shallowEqual, useStoreSelector } from "../state/use-store.ts";
 import type { BuilderStore } from "../state/builder-store.ts";
+import { recoverDraftWithUndo } from './Toast/undo-actions.ts';
 export function ConfigManager({ store }: { store: BuilderStore }) {
   const state = useStoreSelector(store, s => ({ configs: s.configs, activeId: s.activeId, dirty: s.dirty, storageReady: s.storageReady, storageError: s.storageError, draftAvailable: s.draftAvailable }), shallowEqual);
   const [name, setName] = useState("My rack");
@@ -82,7 +83,7 @@ export function ConfigManager({ store }: { store: BuilderStore }) {
           Delete configuration
         </button>
         {state.draftAvailable && (
-          <button type="button" onClick={store.recoverDraft}>
+          <button type="button" onClick={() => recoverDraftWithUndo(store)}>
             Recover unsaved draft
           </button>
         )}

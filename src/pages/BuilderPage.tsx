@@ -8,12 +8,15 @@ import { requestExport } from '../components/ExportMenu.tsx';
 import { ariaKeys, dispatchShortcut, shortcutLabel } from '../state/shortcuts.ts';
 import { openPanel, toggleOutliner, useOutlinerOpen } from '../state/editor-ui.ts';
 import { SystemPlacementOptions } from '../components/CableSmithControls.tsx';
+import { roomOf } from '../../rack-generator/wall-items.ts';
 import { floorPart } from '../../rack-generator/floor-registry.ts';
 import { VendorCredit } from '../components/VendorControls.tsx';
 import { ExportMenu } from '../components/ExportMenu.tsx';
 import { RackPresets } from '../components/RackPresets.tsx';
 import { structureSlots } from '../../rack-generator/topology.ts';
 import { ConfigManager } from "../components/ConfigManager.tsx";
+import { findCustomPart } from '../state/custom-parts.ts';
+import { GymSaveControls } from '../components/GymSaveControls.tsx';
 import { PartGallery, GalleryLauncher, CompactCatalog, BrowseCategories, openGallery } from "../components/PartGallery/index.ts";
 import { BuilderSheet, OverflowMenu, PanelToggles, isPhoneLayout, useLayoutMode, type SheetTab } from "../components/MobileShell/index.ts";
 import { TAB_ICONS } from "../components/MobileShell/tab-icons.tsx";
@@ -27,7 +30,7 @@ import {
   useSyncExternalStore,
   type RefObject,
 } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { getBuilderStore, type BuilderSnapshot, type BuilderStore, type CatalogPart } from "../state/builder-store.ts";
 import { shallowEqual, useStoreSelector } from "../state/use-store.ts";
 import { useOpenGym } from "../gyms/useOpenGym.ts";
@@ -36,7 +39,7 @@ import { InspectorPanel } from "../components/Inspector/InspectorPanel.tsx";
 import { SelectionBar } from "../components/SelectionBar/SelectionBar.tsx";
 import { Toaster } from "../components/Toast/Toaster.tsx";
 import { BuildProgress } from "../components/BuildProgress/BuildProgress.tsx";
-import { clearHistoryWithUndo, resetRackWithUndo } from "../components/Toast/undo-actions.ts";
+import { clearHistoryWithUndo, resetRackWithUndo, recoverDraftWithUndo } from "../components/Toast/undo-actions.ts";
 import {
   getPartPlacementInfo,
   getAvailableStructure,
@@ -49,7 +52,19 @@ import type {
 import "../../rack-generator/builder.css";
 import "../components/history-timeline.css";
 import "../components/MobileShell/mobile-shell.css";
+import "./studio-builder.css";
 const cleanName = (name: string) => name.replace(/^BOS STRENGTH\s*/, "");
+function GymHeading({store}:{store:BuilderStore}) {
+  const state=useStoreSelector(store,s=>({configs:s.configs,id:s.activeId,dirty:s.dirty,error:s.storageError,ready:s.storageReady}),shallowEqual);
+  const search=useSearch({strict:false}) as Record<string,unknown>, navigate=useNavigate();
+  useEffect(()=>{
+    if(!state.ready || search.gym || search.recover || (search.design??null)===state.id) return;
+    const {design:_previous,...rest}=search;
+    void navigate({to:'/builder',search:{...rest,...(state.id?{design:state.id}:{})} as never,replace:true});
+  },[state.id,state.ready,search,navigate]);
+  const config=state.configs.find(c=>c.id===state.id);
+  return <div className="project-heading"><span className="live-dot" /><span>{config?.name??'YOUR WORKSPACE'}{config?.gym&&<small style={{display:'block',fontSize:10}} role="status">{state.error?'Save failed':state.dirty?'Saving…':'Saved on this device'}</small>}</span></div>;
+}
 /** Display and search names per definitions list (computed once per worker load, shared by every component). */
 const namesCache = new WeakMap<readonly CatalogPart[], { name: (part: string) => string; lower: (part: string) => string; defaults: (part: string) => CatalogPart["defaults"] | undefined }>();
 function partNames(definitions: readonly CatalogPart[]) {
@@ -111,10 +126,11 @@ function ExportControl({ store, controller }: { store: BuilderStore; controller:
 }
 function PairControl({ store }: { store: BuilderStore }) {
   // Unpairable parts show unchecked, not a disabled "pair on".
-  const { paired, unpairable } = useStoreSelector(store, s => ({
-    paired: s.paired,
+  const { paired, unpairable, placing } = useStoreSelector(store, s => ({
+    paired: s.paired, placing: !!s.placing,
     unpairable: !!s.placing && !getPartPlacementInfo(s.placing.part, s.doc)?.paired && !(floorPart(s.placing.part)?.pair && !s.placing.movingId),
   }), shallowEqual);
+  if (!placing || unpairable) return null;
   return (
     <label className="pair-control">
       <input
@@ -136,21 +152,21 @@ const CatalogPanel = memo(function CatalogPanel({ store }: { store: BuilderStore
   return (
     <aside className="catalog-panel" data-sheet-panel="parts">
       <div className="panel-heading">
-        <h1>Parts</h1>
+        <h1>Equipment</h1><p>Everything your gym needs.</p>
 
       </div>
       <GalleryLauncher />
+      <button type="button" className="studio-custom-launch" onClick={() => openGallery({ custom: true })}>My custom equipment ↗</button>
       <PairControl store={store} />
       <div id="catalog">
         <SystemPlacementOptions store={store} />
         <CompactCatalog store={store} />
-        <RackPresets store={store} />
-        <BrowseCategories />
+        <details className="studio-browse"><summary>Browse by category</summary><BrowseCategories /></details>
+        <details className="studio-advanced"><summary>Rack starting points</summary><p>Replaces the current rack and equipment layout. You can undo this change.</p><RackPresets store={store} /></details>
       </div>
       <div className="catalog-footer">
-        <Link to="/library">Browse parts library ↗</Link>
-        <Link to="/gyms">Pre-built gym gallery ↗</Link>
-        <Link to="/parts/$partId" params={{ partId: "upright" }}>Part detail viewer ↗</Link>
+        <Link to="/library">Customize equipment ↗</Link>
+        <Link to="/gyms">Gym templates ↗</Link>
       </div>
     </aside>
   );
@@ -232,17 +248,17 @@ function useFloatingPanelInsets(shell: RefObject<HTMLDivElement | null>, viewpor
 }
 /** Phone sheet tabs (see components/MobileShell). */
 const SHEET_TABS: readonly SheetTab[] = [
-  { id: "parts", label: "Parts", icon: TAB_ICONS.parts },
-  { id: "inspector", label: "Inspector", icon: TAB_ICONS.inspector },
-  { id: "timeline", label: "Timeline", icon: TAB_ICONS.timeline },
+  { id: "parts", label: "Equipment", icon: TAB_ICONS.parts },
+  { id: "inspector", label: "Edit", icon: TAB_ICONS.inspector },
+  { id: "timeline", label: "History", icon: TAB_ICONS.timeline },
   { id: "room", label: "Room", panel: "inspector", icon: TAB_ICONS.room },
-  { id: "outliner", label: "Outliner", icon: TAB_ICONS.outliner },
+  { id: "outliner", label: "Items", icon: TAB_ICONS.outliner },
 ];
 function StageCaption({ store }: { store: BuilderStore }) {
-  const { viewing, dimensions } = useStoreSelector(store, s => ({ viewing: s.timeline.viewing, dimensions: s.dimensions }), shallowEqual);
+  const { viewing, dimensions } = useStoreSelector(store, s => { const room = roomOf(s.doc); return { viewing: s.timeline.viewing, dimensions: `${(room.left + room.right) / 1000} × ${(room.back + room.front) / 1000} m · ${room.height / 1000} m ceiling` }; }, shallowEqual);
   return (
     <div className="stage-caption">
-      <span className="eyebrow">{viewing ? "Viewing history · edits apply to latest" : "Your rack"}</span>
+      <span className="eyebrow">{viewing ? "Viewing history · edits apply to latest" : "Your gym"}</span>
       <div id="dimensions">{dimensions}</div>
     </div>
   );
@@ -309,8 +325,42 @@ function StatusBar({ store }: { store: BuilderStore }) {
     </footer>
   );
 }
+/** Consume a library handoff only after the destination and catalog have loaded. Refresh must not stage a second copy. */
+function LibraryEquipmentHandoff({ store }: { store: BuilderStore }) {
+  const search = useSearch({ strict: false }) as Record<string, unknown>, navigate = useNavigate();
+  const ready = useStoreSelector(store, s => ({ storage: s.storageReady, catalog: s.definitions.length > 0, id: s.activeId }), shallowEqual);
+  const handled = useRef<string | null>(null);
+  useEffect(() => {
+    const id = typeof search.customPart === 'string' ? search.customPart : null;
+    if (!id || !ready.storage || !ready.catalog || (search.design && ready.id !== search.design) || handled.current === id) return;
+    handled.current = id;
+    const preset = findCustomPart(id);
+    if (preset) store.startCustomPlacement(preset);
+    else store.status('This custom equipment could not be found. Open My custom equipment to choose another item.');
+    const { customPart: _consumed, ...rest } = search;
+    void navigate({ to: '/builder', search: rest as never, replace: true });
+  }, [store, ready.storage, ready.catalog, ready.id, search, navigate]);
+  return null;
+}
 export default function BuilderPage() {
-  const [store] = useState(getBuilderStore);
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const recoveryNavigate = useNavigate();
+  const [store] = useState(() => getBuilderStore(typeof search.design === 'string' ? search.design : undefined));
+  useEffect(() => store.watchLifecycle(), [store]);
+  useEffect(() => {
+    if (!search.recover) return;
+    let cancelled = false;
+    void store.ready.then(() => {
+      if (cancelled) return;
+      void recoverDraftWithUndo(store);
+      const { recover: _recovered, design: _oldDesign, ...rest } = search;
+      const id = store.getSnapshot().activeId;
+      void recoveryNavigate({ to: '/builder', search: { ...rest, ...(id ? { design: id } : {}) } as never, replace: true });
+    });
+    return () => { cancelled = true; };
+    // Recovery is one action; changing unrelated search parameters must not repeat it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, search.recover, recoveryNavigate]);
   const layout = useLayoutMode(), phoneLayout = isPhoneLayout(layout);
   useViewportFitCover();
   const shell = useRef<HTMLDivElement>(null);
@@ -331,7 +381,7 @@ export default function BuilderPage() {
     view: mode => { setView(mode); controller.current?.fit(mode); },
     saveJSON: () => download(new Blob([store.exportJSON()], { type: "application/json" }), "bos-strength-rack.json"),
     loadJSON: () => importFile.current?.click(),
-    openGyms: () => { void navigateRef.current({ to: "/gyms" }); },
+    openGyms: () => { void store.flushStorage().then(() => navigateRef.current({ to: "/gyms" })); },
     exportFile: format => requestExport(format),
     // Undo toast (#205) instead of a confirm: the reset is one history step.
     resetRack: () => { resetRackWithUndo(store, () => controller.current?.refitOnNextBuild()); },
@@ -359,13 +409,11 @@ export default function BuilderPage() {
     <div className="builder-page" data-layout={layout}>
       <div className="builder-shell" ref={shell}>
         <header className="toolbar">
-          <Link className="brand" to="/" aria-label="BOS STRENGTH rack builder">
+          <Link className="brand" to="/" aria-label="Return to gym workspace" onClick={e=>{e.preventDefault();void store.flushStorage().then(()=>{if(!store.getSnapshot().storageError)void navigate({to:'/'});});}}>
             <span className="brand-symbol" aria-hidden="true"><i /><i /><i /></span>
-            BOS STRENGTH<small>RACK BUILDER</small>
+            GYM STUDIO<small>← WORKSPACE</small>
           </Link>
-          <div className="project-heading">
-            <span className="live-dot" /> YOUR WORKSPACE
-          </div>
+          <GymHeading store={store} />
           <div className="toolbar-actions">
             {/* Toolbar actions slot (#203): components that belong in the top bar at every size. */}
             <div className="toolbar-slot" data-slot="toolbar-actions">
@@ -376,9 +424,9 @@ export default function BuilderPage() {
               </button>
             </div>
             <HistoryButtons store={store} />
-            <button type="button" className="toolbar-add primary" aria-haspopup="dialog" aria-label="Add parts" onClick={() => openGallery()}>
+            <button type="button" className="toolbar-add primary" aria-haspopup="dialog" aria-label="Add equipment" onClick={() => openGallery()}>
               {/* The narrowest phones show "+ Add" (#215). */}
-              <span aria-hidden="true">+</span><span className="toolbar-add-label">Add<span className="toolbar-add-noun"> parts</span></span>
+              <span aria-hidden="true">+</span><span className="toolbar-add-label">Add<span className="toolbar-add-noun"> equipment</span></span>
             </button>
             <OverflowMenu>
               {/* Studio: every secondary action lives in this one menu at every size. */}
@@ -425,6 +473,8 @@ export default function BuilderPage() {
             />
           </div>
         </header>
+        <LibraryEquipmentHandoff store={store} />
+        <GymSaveControls store={store} backup={api.saveJSON} />
         <main className="stage">
           <div id="viewport" ref={viewport} />
           <ViewControls store={store} view={view} fit={fit} />

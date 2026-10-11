@@ -33,7 +33,7 @@ export function FloorInspector({store,id}:{store:BuilderStore;id:string}) {
     else {doc.appearance=resetAppearanceField(doc.appearance,'color',id);}
     store.commit(doc);
   };
-  return <><InspectorHeader store={store} part={item.part} /><div id="inspector" className="insp-body inspector-fields">
+  return <><InspectorHeader store={store} part={item.part} title={item.label} /><div id="inspector" className="insp-body inspector-fields">
     <Section id="placement" title="Placement" badge={item.cradle ? 'parked' : `${Math.round(item.rotation*180/Math.PI)}°`}>
       {!item.cradle && <label className="field"><span>Rotation (degrees)</span><NumericControl label={`${Noun} rotation`} value={item.rotation*180/Math.PI} min={-180} max={180} step={15} defaultValue={0} onGestureStart={store.beginGesture} onGestureEnd={store.endGesture} onValue={v=>store.updateFloor(id,{rotation:v*Math.PI/180})}/></label>}
       {part.parks && <p className="note">{cradle ? `Parked in ${cradle}` : item.cradle ? 'Its cradle is gone — lying on the floor.' : 'On the floor · double-click to park in a cradle'}</p>}
@@ -47,7 +47,7 @@ export function FloorInspector({store,id}:{store:BuilderStore;id:string}) {
         reset={{changed:item.params[key] !== param.default,onReset:()=>setParams({...item.params,[key]:param.default})}} />;})}
     </Section>}
     {part.bar && <Section id="plates" title="Plates"><BarPlatesEditor key={id} store={store} item={item} part={part} /></Section>}
-    <Section id="appearance" title="Appearance">
+    <Section id="appearance" title="Appearance" defaultOpen={false}>
       {part.colors && <Swatches label={colorLabel} colors={part.colors} value={color} onChange={paint} defaultLabel="Default / global" reset={{changed:!!color,onReset:()=>paint(undefined)}} />}
       <AppearanceControls store={store} />
     </Section>

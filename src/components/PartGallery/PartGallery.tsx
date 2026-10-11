@@ -1,6 +1,9 @@
+import { Link } from '@tanstack/react-router';
+import { CustomParts } from '../CustomParts.tsx';
+import { useCustomParts } from '../../state/custom-parts.ts';
 /** Parts gallery (#183): a large overlay for browsing the whole catalog. Category nav, instant search, brand chips,
  * "fits my rack", recents and favourites, a windowed thumbnail grid with arrow-key navigation, and a detail pane whose
- * Add / Add pair start the builder's usual placement flow. Cards are `[data-part]` buttons: click (or Enter) adds,
+ * Add / Add pair start the builder's usual placement flow. Cards are `[data-part]` buttons: click (or Enter) previews,
  * dragging drops into the viewport. Mounted only while open; it subscribes to the definitions and the rack only. */
 import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import type { BuilderStore } from '../../state/builder-store.ts';
@@ -33,7 +36,7 @@ export const PartGallery = memo(function PartGallery({ store }: { store: Builder
 export const GalleryLauncher = memo(function GalleryLauncher({ total = CATALOG_PART_IDS.length }: { total?: number }) {
   return <button type="button" id="open-gallery" className="gallery-launch"  aria-haspopup="dialog" aria-keyshortcuts={ariaKeys('open-gallery')} onClick={() => openGallery()}>
     <span className="gallery-launch-plus" aria-hidden="true">+</span>
-    <span><strong>Add parts</strong><small>Browse all {total} parts</small></span>
+    <span><strong>Add equipment</strong><small>Explore {total} items</small></span>
     <kbd aria-hidden="true">/</kbd>
   </button>;
 });
@@ -49,11 +52,14 @@ interface CardActions {
 }
 
 function GalleryDialog({ store }: { store: BuilderStore }) {
+  const initial = useRef(galleryView.get()).current;
+  const [customView, setCustomView] = useState(initial.custom ?? false);
+  const customParts = useCustomParts();
+  const customStatus = useStoreSelector(store, s => s.status);
   const definitions = useStoreSelector(store, selectDefinitions);
   // Commits structured-clone the doc; the rack slice only changes identity when its values do.
   const rack = useStoreSelector(store, selectRack, shallowEqual);
   const prefs = useGalleryPrefs();
-  const initial = useRef(galleryView.get()).current;
   const [scope, setScopeState] = useState<GalleryScope>(initial.scope);
   const [query, setQuery] = useState(initial.query);
   const [brands, setBrands] = useState<readonly string[]>(initial.brands);
@@ -97,7 +103,7 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
       add: id => { close(); addPart(store, id); },
       focus: index => { window.clearTimeout(hoverTimer); setActiveIdByIndex(index); },
       // Hover intent: crossing cards on the way to the detail pane does not change it.
-      hover: index => { window.clearTimeout(hoverTimer); hoverTimer = window.setTimeout(() => setActiveIdByIndex(index), 160); },
+      hover: () => {},
       unhover: () => window.clearTimeout(hoverTimer),
       inspect: index => { window.clearTimeout(hoverTimer); setActiveIdByIndex(index); },
       dragStart: (id, event) => {
@@ -124,7 +130,7 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
     if (matches('gallery-close', event)) { event.preventDefault(); close(); return; }
     if (matches('gallery-search', event) && !isTyping(event.target)) { event.preventDefault(); search.current?.select(); search.current?.focus(); return; }
     if (event.key === 'Tab') {
-      const focusable = [...root.current!.querySelectorAll<HTMLElement>('button:not([disabled]):not([tabindex="-1"]),input,a[href],[tabindex="0"]')].filter(el => el.offsetParent !== null);
+      const focusable = [...root.current!.querySelectorAll<HTMLElement>('button:not([disabled]):not([tabindex="-1"]),input,summary,a[href],[tabindex="0"]')].filter(el => el.offsetParent !== null);
       const first = focusable[0], last = focusable.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -132,9 +138,9 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
   };
   const onSearchKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); root.current?.querySelector<HTMLElement>('.pg-card[tabindex="0"]')?.focus(); }
-    if (matches('gallery-add', event) && active) { event.preventDefault(); actions.add(active.id); }
+    if (!customView && matches('gallery-add', event) && active) { event.preventDefault(); root.current?.querySelector<HTMLElement>('.pg-card[tabindex="0"]')?.focus(); }
   };
-  const scopeTitle = scope.kind === 'all' ? 'All parts' : scope.kind === 'recent' ? 'Recently added' : scope.kind === 'favourites' ? 'Favourites' : scope.section ?? scope.category;
+  const scopeTitle = scope.kind === 'all' ? 'All equipment' : scope.kind === 'recent' ? 'Recently added' : scope.kind === 'favourites' ? 'Favourites' : scope.section ?? scope.category;
   const shownFacets = allBrands ? facets : facets.slice(0, BRAND_CHIPS);
   for (const key of brands) if (!shownFacets.some(f => f.key === key)) { const facet = facets.find(f => f.key === key); if (facet) shownFacets.push(facet); }
 
@@ -143,38 +149,42 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
     <div className="pg-panel" role="dialog" aria-modal="true" aria-labelledby="pg-title">
       <header className="pg-header">
         <div className="pg-heading">
-          <span className="pg-eyebrow">Parts gallery · {items.length} parts</span>
-          <h2 id="pg-title">Add parts</h2>
+          <span className="pg-eyebrow">STUDIO COLLECTION · {items.length} items</span>
+          <h2 id="pg-title">Find your equipment</h2>
         </div>
         <label className="pg-search">
           <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" /><path d="m11 11 3.5 3.5" /></svg>
-          <input ref={search} id="gallery-search" type="search" placeholder="Search name, brand or type…" aria-label="Search parts" aria-controls="pg-grid"
+          <input ref={search} id="gallery-search" type="search" placeholder="Search name, brand or type…" aria-label="Search equipment" aria-controls={customView ? 'custom-parts-results' : 'pg-grid'}
             autoComplete="off" spellCheck={false} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onSearchKey} />
         </label>
-        <button type="button" className="pg-close" aria-label="Close parts gallery" onClick={() => close()}>×<kbd aria-hidden="true">ESC</kbd></button>
+        <button type="button" className="pg-close" aria-label="Close equipment picker" onClick={() => close()}>×<kbd aria-hidden="true">ESC</kbd></button>
       </header>
-      <nav className="pg-nav" aria-label="Part categories">
+      <nav className="pg-nav" aria-label="Equipment categories">
         <ul>
-          <NavItem label="All parts" count={items.length} current={scope.kind === 'all'} onSelect={() => setScope({ kind: 'all' })} />
-          <NavItem label="Recent" count={prefs.recent.length} current={scope.kind === 'recent'} onSelect={() => setScope({ kind: 'recent' })} icon="↺" />
-          <NavItem label="Favourites" count={prefs.favourites.length} current={scope.kind === 'favourites'} onSelect={() => setScope({ kind: 'favourites' })} icon="★" />
+          <NavItem label="My custom equipment" count={customParts.parts.length} current={customView} onSelect={() => setCustomView(true)} />
+          <NavItem label="All equipment" count={items.length} current={!customView && scope.kind === 'all'} onSelect={() => { setCustomView(false); setScope({ kind: 'all' }); }} />
+          <NavItem label="Recent" count={prefs.recent.length} current={!customView && scope.kind === 'recent'} onSelect={() => { setCustomView(false); setScope({ kind: 'recent' }); }} icon="↺" />
+          <NavItem label="Favourites" count={prefs.favourites.length} current={!customView && scope.kind === 'favourites'} onSelect={() => { setCustomView(false); setScope({ kind: 'favourites' }); }} icon="★" />
         </ul>
         <ul className="pg-categories">
           {tree.map(category => {
-            const open = scope.kind === 'category' && scope.category === category.label;
+            const open = !customView && scope.kind === 'category' && scope.category === category.label;
             return <NavItem key={category.label} label={category.label} count={category.count} current={open && !scope.section}
-              expanded={category.sections.length > 1 ? open : undefined} onSelect={() => setScope({ kind: 'category', category: category.label })}>
+              expanded={category.sections.length > 1 ? open : undefined} onSelect={() => { setCustomView(false); setScope({ kind: 'category', category: category.label }); }}>
               {open && category.sections.length > 1 && <ul className="pg-sections">
                 {category.sections.map(section => <NavItem key={section.label} label={section.label} count={section.count}
                   current={scope.kind === 'category' && scope.section === section.label}
-                  onSelect={() => setScope({ kind: 'category', category: category.label, section: section.label })} />)}
+                  onSelect={() => { setCustomView(false); setScope({ kind: 'category', category: category.label, section: section.label }); }} />)}
               </ul>}
             </NavItem>;
           })}
         </ul>
       </nav>
-      <section className="pg-main" aria-label="Results">
-        <div className="pg-filters">
+      {customView ? <div id="custom-parts-results" className="pg-custom-results"><Link className="studio-library-link" to="/library" onClick={() => close()}>+ Customize or add your own equipment ↗</Link><CustomParts query={query} onUseCatalog={id => actions.add(id)} onAdd={preset => {
+        if (store.startCustomPlacement(preset)) close();
+      }} /><p className="pg-status" role="status">{customStatus}</p></div> : <section className="pg-main" aria-label="Results">
+        <p className="pg-instructions">Select equipment to preview it, then add it to your gym.</p>
+        <details className="pg-filter-disclosure"><summary>Filters{brands.length + Number(fitsOnly) > 0 ? ` · ${brands.length + Number(fitsOnly)} active` : ''}</summary><div className="pg-filters">
           <div className="pg-brands">
             <div className={`pg-chips${allBrands ? ' pg-chips-all' : ''}`} role="group" aria-label="Brands">
               {shownFacets.map(facet => <button type="button" key={facet.key} className="pg-chip" aria-pressed={brands.includes(facet.key)}
@@ -189,15 +199,15 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
             <input type="checkbox" id="gallery-fits" checked={fitsOnly} onChange={e => setFitsOnly(e.target.checked)} />
             <span>Fits my rack<small>{rackSummary(rack)}{refused ? ` · hides ${refused}` : ''}</small></span>
           </label>}
-        </div>
+        </div></details>
         <p className="pg-status" role="status" aria-live="polite">
-          <strong>{scopeTitle}</strong> · {results.length} {results.length === 1 ? 'part' : 'parts'}{deferredQuery.trim() ? ` for “${deferredQuery.trim()}”` : ''}
+          <strong>{scopeTitle}</strong> · {results.length} {results.length === 1 ? 'item' : 'items'}{deferredQuery.trim() ? ` for “${deferredQuery.trim()}”` : ''}
         </p>
         {results.length ? <GalleryGrid items={results} grouped={grouped} activeIndex={activeIndex} actions={actions} favourites={favourites}
           fit={fit} defaults={defaults} thumbs={definitions.length > 0} resetKey={`${JSON.stringify(scope)}|${deferredQuery}|${brands.join()}|${fitsOnly}`} />
-          : <EmptyState scope={scope} query={deferredQuery} onAll={() => { setScope({ kind: 'all' }); setQuery(query); }} />}
-      </section>
-      {active && <GalleryDetail item={active} definition={defaults.get(active.id)} fit={fit(active.id)} favourite={favourites.has(active.id)} rack={rack} thumbs={definitions.length > 0} store={store} close={close} />}
+          : <EmptyState scope={scope} query={deferredQuery} onAll={() => { setScope({ kind: 'all' }); setQuery(''); setFitsOnly(false); }} />}
+      </section>}
+      {!customView && active && <GalleryDetail item={active} definition={defaults.get(active.id)} fit={fit(active.id)} favourite={favourites.has(active.id)} rack={rack} thumbs={definitions.length > 0} store={store} close={close} />}
     </div>
   </div>;
 }
@@ -213,7 +223,7 @@ function NavItem({ label, count, current, expanded, icon, onSelect, children }: 
 
 function EmptyState({ scope, query, onAll }: { scope: GalleryScope; query: string; onAll: () => void }) {
   const message = scope.kind === 'recent' ? 'Parts you add show up here.' : scope.kind === 'favourites' ? 'Star a part (★ in its details, or F on a card) to keep it here.' : `No parts match${query.trim() ? ` “${query.trim()}”` : ''} with these filters.`;
-  return <div className="pg-empty"><p>{message}</p>{scope.kind !== 'all' && <button type="button" onClick={onAll}>Search all parts</button>}</div>;
+  return <div className="pg-empty"><p>{message}</p><button type="button" onClick={onAll}>Reset search & filters</button></div>;
 }
 
 /** Windowed grid: only the rows near the viewport are mounted (~30 cards), so 470 parts scroll and filter smoothly. */
@@ -237,7 +247,7 @@ const GalleryGrid = memo(function GalleryGrid({ items, grouped, activeIndex, act
   useLayoutEffect(() => { if (scroller.current) scroller.current.scrollTop = 0; setScrollTop(0); }, [resetKey]);
   // Inner width (the scroller pads 12 px, 8 px on phones); narrower cards on phones keep two columns.
   const inner = size.width - (size.width < 500 ? 16 : 24), min = size.width < 500 ? 136 : CARD_MIN;
-  const columns = Math.max(1, Math.floor((inner + GAP) / (min + GAP)));
+  const columns = Math.max(1, Math.min(size.width < 500 ? 2 : Infinity, Math.floor((inner + GAP) / (min + GAP))));
   const layout = useMemo(() => gridLayout(items, columns, { grouped, rowHeight: ROW_HEIGHT, headerHeight: HEADER_HEIGHT, gap: GAP }), [items, columns, grouped]);
   // Three rows of overscan either side: wheel scrolling reaches already-mounted cards before new rows render.
   const [first, last] = visibleRows(layout, scrollTop, size.height, 3);
@@ -296,7 +306,7 @@ const GalleryGrid = memo(function GalleryGrid({ items, grouped, activeIndex, act
     rows.push(<div key={`r${row.start}`} role="row" className="pg-row" style={{ transform: `translateY(${row.top}px)`, height: row.height, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>{cells}</div>);
   }
   return <div className="pg-scroller" ref={scroller} onScroll={onScroll}>
-    <div id="pg-grid" role="grid" aria-label="Parts" aria-rowcount={layout.rows.length} aria-colcount={columns} className="pg-grid" style={{ height: layout.height }} onKeyDown={onKeyDown}
+    <div id="pg-grid" role="grid" aria-label="Equipment" aria-rowcount={layout.rows.length} aria-colcount={columns} className="pg-grid" style={{ height: layout.height }} onKeyDown={onKeyDown}
       onFocus={() => { hadFocus.current = true; }} onBlur={e => { if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) hadFocus.current = false; }}>
       {rows}
     </div>
@@ -309,7 +319,7 @@ const GalleryCard = memo(function GalleryCard({ item, index, active, tabbable, f
   return <div role="gridcell" className="pg-cell" data-index={index} aria-selected={active}>
     <button type="button" className="pg-card" data-part={item.id} data-fits={fits ? undefined : 'false'} tabIndex={tabbable ? 0 : -1}
       aria-label={item.name} aria-describedby={`pg-d-${item.id}`} draggable={item.draggable}
-      onClick={() => actions.add(item.id)} onFocus={() => actions.focus(index)}
+      onClick={() => actions.inspect(index)} onFocus={() => actions.focus(index)}
       onPointerEnter={e => { if (e.pointerType === 'mouse') actions.hover(index); }} onPointerLeave={actions.unhover}
       onDragStart={e => actions.dragStart(item.id, e)} onDragEnd={actions.dragEnd}>
       <PartThumbnail part={item.id} params={params} enabled={thumbs} className="pg-thumb" />
@@ -318,7 +328,7 @@ const GalleryCard = memo(function GalleryCard({ item, index, active, tabbable, f
         <span className="pg-card-brand">{item.brand}</span>
         <span className="pg-card-spec">{item.spec}{fits ? '' : ' · does not fit your rack'}</span>
       </span>
-      <span className="pg-card-add" aria-hidden="true">+</span>
+      <span className="pg-card-add" aria-hidden="true">↗</span>
     </button>
     {favourite && <span className="pg-card-fav" aria-label="Favourite">★</span>}
     <button type="button" className="pg-card-info" tabIndex={-1} aria-label={`Details: ${item.name}`} onClick={() => actions.inspect(index)}>i</button>
@@ -342,11 +352,12 @@ const GalleryDetail = memo(function GalleryDetail({ item, definition, fit, favou
       <dl className="pg-dims">{rows.map(([label, value], i) => <div key={i}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       {item.description && <p className="pg-description">{item.description}</p>}
     </div>
+    <div className="pg-mobile-selection">{item.name}</div>
     <div className="pg-detail-actions">
       {item.pairable ? <>
         <button type="button" id="gallery-add-pair" className={pairsByDefault ? 'primary' : ''} onClick={() => add('pair')}>Add pair</button>
         <button type="button" id="gallery-add" className={pairsByDefault ? '' : 'primary'} onClick={() => add('single')}>Add one</button>
-      </> : <button type="button" id="gallery-add" className="primary" onClick={() => add('default')}>{item.kind === 'system' ? 'Install' : 'Add to rack'}</button>}
+      </> : <button type="button" id="gallery-add" className="primary" onClick={() => add('default')}>Add to gym</button>}
       <button type="button" className="pg-fav" aria-pressed={favourite} aria-label={favourite ? 'Remove from favourites' : 'Add to favourites'} onClick={() => toggleFavouritePart(item.id)}>{favourite ? '★' : '☆'}</button>
       {item.draggable && <p className="pg-drag-hint">or drag a card into the scene</p>}
     </div>

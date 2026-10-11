@@ -1,0 +1,44 @@
+# Step 2 of the AI part lookup: an admin's "Request full catalog part" opens an issue labelled `catalog-request`
+# (server/index.ts). Claude Code works the issue with docs/catalog-playbook.md: researches the product, models it as a
+# real catalog part with tests and thumbnails, and leaves a branch + pull request for you to review. Nothing deploys.
+#
+# Setup (once): install the Claude GitHub app on this repo (https://github.com/apps/claude), add the repository secret
+# ANTHROPIC_API_KEY, and create the `catalog-request` label. See docs/ai-parts.md.
+name: Catalog part request
+on:
+  issues:
+    types: [labeled]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+concurrency:
+  group: catalog-request-${{ github.event.issue.number }}
+  cancel-in-progress: false
+jobs:
+  build-part:
+    if: github.event.label.name == 'catalog-request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Renders (scripts/shoot-part.ts) and thumbnails need a headless Chromium.
+      - run: npx playwright install --with-deps chromium
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          label_trigger: catalog-request
+          branch_prefix: catalog/
+          track_progress: true
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 200
+            --allowedTools "Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,Bash(npm run typecheck),Bash(npm test),Bash(npm run thumbnails:*),Bash(npx tsx:*),Bash(npx vite:*),Bash(curl:*),Bash(ls:*),Bash(git status),Bash(git diff:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*)"

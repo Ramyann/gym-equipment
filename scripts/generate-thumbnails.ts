@@ -57,18 +57,20 @@ console.log(`${entries.length} catalog parts, ${todo.length} to render`);
 
 const failures: string[] = [];
 if (todo.length) {
-  const server = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] });
+  const server = spawn(process.execPath, [`${root}node_modules/vite/bin/vite.js`, '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] });
   const base = `http://127.0.0.1:${port}`;
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Vite did not start within 60 s.')), 60000);
     server.stdout!.on('data', (chunk: Buffer) => { if (chunk.toString().includes(String(port))) { clearTimeout(timer); resolve(); } });
     server.on('exit', (code) => reject(Error(`Vite exited (${code}); is port ${port} taken?`)));
   });
-  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
+    const renderer = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+    browser = renderer;
     let next = 0, done = 0;
     await Promise.all(Array.from({ length: Math.min(jobs, todo.length) }, async () => {
-      const page = await browser.newPage();
+      const page = await renderer.newPage();
       page.setDefaultTimeout(120000);
       await page.goto(`${base}/scripts/thumbnails.html`);
       await page.waitForFunction('window.thumbnailHarnessReady === true');
@@ -91,7 +93,7 @@ if (todo.length) {
       await page.close();
     }));
   } finally {
-    await browser.close();
+    await browser?.close();
     server.kill();
   }
 }

@@ -45,7 +45,7 @@ export interface StructureVariant { part: PartId; params: NumericParams }
 /** Plates loaded on a bar's two sleeves (#160), each stack from the inner collar outward. `both` loads the sleeves
  * alike (the default); uneven loading stores the +X (`right`) and −X (`left`) sleeves separately. */
 export type BarLoad = { both: PlateId[] } | { right: PlateId[]; left: PlateId[] };
-export interface FloorItem { id: string; part: FloorPartId; position: Vec2; rotation: number; params: NumericParams; cradle?: string; /** Bars with sleeves (`bar` spec) only. */ plates?: BarLoad }
+export interface FloorItem { id: string; part: FloorPartId; position: Vec2; rotation: number; params: NumericParams; cradle?: string; /** Name shown for a placed custom part (its saved name); defaults to the part's own name. */ label?: string; /** Bars with sleeves (`bar` spec) only. */ plates?: BarLoad }
 /** Wall-mounted scenery (#85): `position` is [u along the wall from its centre, face-centre height] in mm. */
 export interface WallItem { id: string; part: WallPartId; wall: WallId; position: Vec2; params: NumericParams }
 /** An attachment hanging on hook `slot` of wall item `panel`; it follows the panel. */
@@ -55,7 +55,7 @@ export interface RackDoc { room?: Room; wallItems?: WallItem[]; hangItems?: Hang
 export interface StructureSlot { id: string; part: PartId; connectedTo: UprightId[] }
 export interface LocalBox { min: Vec3; max: Vec3 }
 export type Mount = Target & { position: Vec3; center: Vec3; localAnchor?: Vec3; pinAxis?: Vec3; label?: string; connectorId?: string; /** Hosted mounts: the host accessory id (its units' bodies are not a collision). */ hostId?: string }
-export interface ResolvedInstance { logo?: ValidatedLogo; id: string; part: PartId; params: NumericParams; position: Vec3; rotation: Vec3; mount: Mount | null; mounts: Mount[]; ownerId: string; kind: 'structure' | 'accessory' | 'floor-item' | 'wall-item'; paired: boolean; connectedTo: string[]; collisionEnabled?: boolean; collisionBoxes?: LocalBox[]; localOutward?: Vec3; name?: string }
+export interface ResolvedInstance { logo?: ValidatedLogo; id: string; part: PartId; params: NumericParams; position: Vec3; rotation: Vec3; mount: Mount | null; mounts: Mount[]; ownerId: string; kind: 'structure' | 'accessory' | 'floor-item' | 'wall-item'; paired: boolean; connectedTo: string[]; collisionEnabled?: boolean; collisionBoxes?: LocalBox[]; localOutward?: Vec3; name?: string; label?: string }
 export interface PlacementField { key: string; label: string; min: number; max: number; step: number }
 export interface PlacementInfo { family: string; label: string; paired: boolean; /** Initial pair choice; omitted means `paired`. */ defaultPaired?: boolean; slots?: string[]; fields: PlacementField[]; faces?: Face[]; fixedHole?: number; requiredPitch?: number; handed?: boolean; mountType?: string; description?: string }
 export interface CollisionWarning { ids: [string, string]; message: string }

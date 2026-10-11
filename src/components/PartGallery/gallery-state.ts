@@ -18,16 +18,16 @@ export function createAtom<T>(initial: () => T) {
   };
 }
 
-export interface GalleryView { open: boolean; scope: GalleryScope; query: string; brands: readonly string[]; fitsOnly: boolean }
+export interface GalleryView { open: boolean; custom?: boolean; scope: GalleryScope; query: string; brands: readonly string[]; fitsOnly: boolean }
 export const galleryView = createAtom<GalleryView>(() => ({ open: false, scope: { kind: 'all' }, query: '', brands: [], fitsOnly: false }));
 let returnFocus: HTMLElement | null = null;
 /** Opens the gallery on all parts (or the given scope and query), with fresh brand chips; only the "fits my rack"
  * choice carries over from the last visit. */
-export function openGallery(options: { scope?: GalleryScope; query?: string } = {}) {
+export function openGallery(options: { scope?: GalleryScope; query?: string; custom?: boolean } = {}) {
   const view = galleryView.get();
   if (view.open) return;
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  galleryView.set({ ...view, open: true, scope: options.scope ?? { kind: 'all' }, query: options.query ?? '', brands: [] });
+  galleryView.set({ ...view, open: true, custom: options.custom ?? false, scope: options.scope ?? { kind: 'all' }, query: options.query ?? '', brands: [] });
 }
 /** Closes the gallery and returns focus to whatever opened it (unless `restoreFocus` is false). */
 export function closeGallery(state: Partial<Omit<GalleryView, 'open'>> = {}, restoreFocus = true) {

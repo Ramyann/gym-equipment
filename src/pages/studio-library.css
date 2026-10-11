@@ -1,0 +1,38 @@
+.studio-library { --c-text: #25372e; --c-line: #dde3dc; --c-surface: #fff; }
+.studio-library .library-gallery { font-family: inherit; background: transparent; color: inherit; padding: 36px 48px; min-width: 0; }
+.studio-library .library-gallery h1, .studio-library .library-gallery h2 { font-family: inherit; }
+.studio-library .library-gallery h1 { font-size: 30px; letter-spacing: -.8px; margin: 0; }
+.studio-library .library-gallery header { margin-bottom: 28px; align-items: flex-start; }
+.library-welcome { display: grid; grid-template-columns: 1fr 220px; gap: 36px; padding: 28px 32px; background: #e9eee3; border-radius: 16px; border: 1px solid #dbe3d2; margin-bottom: 30px; }
+.library-welcome h2 { font-size: 22px; letter-spacing: -.5px; margin: 10px 0; }
+.library-welcome p { font-size: 13px; line-height: 1.8; color: #68766d; max-width: 570px; }
+.studio-library button { font: inherit; cursor: pointer; border: 1px solid #d5ddd3; border-radius: 8px; background: #fff; padding: 10px 14px; color: #325c43; }
+.library-workflow { display: flex; flex-direction: column; justify-content: center; gap: 18px; font-size: 12px; }
+.library-workflow span { display: flex; gap: 10px; align-items: center; }.library-workflow b { display: grid; place-items: center; width: 27px; height: 27px; background: #fff; border-radius: 50%; color: #325c43; }
+.library-tabs { display: flex; gap: 28px; border-bottom: 1px solid #dde3dc; margin-bottom: 22px; }
+.studio-library .library-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: #68766d; padding: 14px 0; font-size: 13px; }
+.studio-library .library-tabs button[aria-pressed=true] { border-color: #325c43; color: #325c43; font-weight: 600; }
+.library-tabs span { padding: 2px 6px; background: #e9eee3; border-radius: 5px; font-size: 10px; margin-left: 6px; }
+.studio-library .gallery-filters { background: #f4f5f1; border: 0; padding: 0 0 16px; position: static; gap: 16px; }
+.studio-library input, .studio-library select { background: #fff; border-radius: 8px; }
+.studio-library .library-sections { display: none; }
+.studio-library .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+.studio-library .gallery-card { background: #fff; border: 1px solid #dde3dc; padding: 16px; border-radius: 12px; min-height: 260px; box-shadow: 0 3px 12px #25372e04; }
+.studio-library .gallery-card:hover { border-color: #93ab8a; background: #fff; }
+.studio-library .gallery-card h2 { font-size: 15px; line-height: 1.5; margin: 9px 0 6px; letter-spacing: -.2px; }
+.studio-library .gallery-card strong { color: #325c43; margin-top: auto; padding-top: 14px; font-size: 12px; }
+.studio-library .gallery-category { font-size: 10px; letter-spacing: .6px; }
+.studio-library .gallery-specs { font-size: 11px; line-height: 1.6; }
+.studio-library .library-section-title { font-size: 18px; letter-spacing: -.3px; margin: 24px 0 16px; }
+.studio-library .custom-parts { padding: 0; }.studio-library .custom-parts > h2 { display: none; }.studio-library .custom-parts > p { font-size: 12px; color: #68766d; margin: 0 0 22px; }
+.studio-library .custom-parts-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }.studio-library .custom-part-card { padding: 18px; border-radius: 12px; }.studio-library .custom-part-card h3 { font-size: 16px; }.studio-library .custom-part-card small { color: #68766d; }
+.studio-library .custom-part-actions button:first-child { background: #325c43; color: white; border-color: #325c43; }.studio-library .custom-part-actions a { color: #325c43; padding: 8px; }
+.library-empty { padding: 36px 24px; text-align: center; border: 1px dashed #ccd7c7; border-radius: 12px; background: #fbfcf8; margin: 16px 0; }.library-empty h3 { font-size: 20px; margin: 12px 0; }.library-empty p { font-size: 13px; color: #68766d; line-height: 1.8; }.library-empty > span { font-size: 35px; color: #325c43; }.library-empty a { color: #325c43; }
+.library-storage-note { font-size: 11px; color: #68766d; margin-top: 30px; }
+.library-create-options { position: relative; flex: none; }.library-create-options > summary { cursor: pointer; list-style: none; padding: 12px 18px; background: #325c43; color: white; border-radius: 9px; font-size: 13px; }.library-create-options > div { position: absolute; right: 0; top: calc(100% + 8px); width: 260px; padding: 14px; background: white; border: 1px solid #dde3dc; box-shadow: 0 12px 30px #25372e17; z-index: 10; border-radius: 12px; }.library-create-options p { font-size: 12px; line-height: 1.7; color: #68766d; margin: 0 0 10px; }.studio-library header .library-create-options a { display: block; white-space: normal; background: #f4f5f1; color: #25372e; margin: 5px 0; font-size: 12px; border-radius: 6px; padding: 10px; }
+.equipment-destinations { display: grid; gap: 12px; max-height: 45dvh; overflow: auto; }.equipment-destinations button { display: flex; align-items: center; gap: 18px; padding: 14px; background: #fff; border: 1px solid #dde3dc; border-radius: 10px; text-align: left; cursor: pointer; font: inherit; color: #25372e; }.equipment-destinations button:hover { border-color: #325c43; background: #f4f6f0; }.equipment-destinations .gym-preview { width: 90px; height: 70px; flex: none; }.equipment-destinations strong, .equipment-destinations small { display: block; }.equipment-destinations small { margin-top: 6px; }.equipment-destinations button > span:last-child { margin-left: auto; }.equipment-destination p { margin: 18px 0; }
+.custom-delete-notice { padding: 14px; background: #edf2e7; border-radius: 8px; font-size: 12px; margin-bottom: 16px; }
+@media(max-width:1000px) { .studio-library .library-gallery { padding: 28px; }.library-welcome { grid-template-columns: 1fr; gap: 14px; padding: 24px; }.library-workflow { flex-direction: row; justify-content: flex-start; gap: 14px; flex-wrap: wrap; } }
+@media(max-width:700px) { .studio-library .library-gallery { padding: 22px 18px; }.studio-library .library-gallery h1 { font-size: 25px; }.studio-library .library-gallery header { gap: 12px; }.library-create-options > summary { padding: 11px; font-size: 11px; }.library-welcome { padding: 20px; }.library-welcome h2 { font-size: 20px; }.library-workflow { flex-direction: column; gap: 10px; }.library-tabs { gap: 18px; }.studio-library .library-tabs button { font-size: 12px; }.studio-library .gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.studio-library .gallery-card { padding: 12px; min-height: 240px; }.studio-library .gallery-card h2 { font-size: 13px; }.studio-library .gallery-card .part-thumbnail { height: 110px; }.studio-library .gallery-filters label { width: 100%; }.studio-library .gallery-filters input { width: 100%; }.studio-library .library-section-title { font-size: 17px; }.equipment-destinations .gym-preview { width: 64px; height: 54px; } }
+
+@media(max-width:700px) { .library-welcome .library-workflow { display: none; } }

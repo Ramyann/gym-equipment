@@ -10,7 +10,7 @@ import { galleryCatalog, openGallery, selectActivePart, selectDefinitions, useGa
 import { useStoreSelector } from '../../state/use-store.ts';
 
 /** First-visit picks: one of each kind of placement (rack pair, floor item, spanning rack part, hang item). */
-export const QUICK_PICKS: readonly PartId[] = ['j-hook-standard', 'safety-pin-pipe', 'pullup-straight', 'olympic-barbell', 'landmine', 'rogue-adjustable-bench-3'];
+export const QUICK_PICKS: readonly PartId[] = ['rep-fb-5000', 'rogue-adjustable-bench-3', 'olympic-barbell', 'rep-bar-weight-plate-tree'];
 const SHOWN = 8;
 
 /** Favourites and recent parts (quick picks until the first gallery add), as sidebar cards. */
@@ -40,7 +40,7 @@ export const BrowseCategories = memo(function BrowseCategories() {
   const { items } = galleryCatalog(NO_DEFINITIONS);
   const tree = useMemo(() => categoryTree(items), [items]);
   return <section className="compact-section compact-browse" aria-label="Browse by category">
-    <h3>Browse the catalog</h3>
+    <h3>Equipment categories</h3>
     <ul>
       {tree.map(category => <li key={category.label}>
         <button type="button" data-category={category.label} onClick={() => openGallery({ scope: { kind: 'category', category: category.label } })}>
@@ -48,7 +48,7 @@ export const BrowseCategories = memo(function BrowseCategories() {
         </button>
       </li>)}
     </ul>
-    <button type="button" className="compact-browse-all" onClick={() => openGallery({ scope: { kind: 'all' } })}>Browse all {items.length} parts ↗</button>
+    <button type="button" className="compact-browse-all" onClick={() => openGallery({ scope: { kind: 'all' } })}>Browse all {items.length} items ↗</button>
   </section>;
 });
 const NO_DEFINITIONS: readonly never[] = [];

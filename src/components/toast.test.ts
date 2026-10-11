@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { BuilderStore } from '../state/builder-store.ts';
 import { ToastStore, withUndo, withCheckpoint } from './Toast/toast-store.ts';
 import { resizeAssembly } from '../../rack-generator/assembly.ts';
+import { LocalConfigStorage } from '../state/config-storage.ts';
+import { recoverDraftWithUndo } from './Toast/undo-actions.ts';
+import { toasts as sharedToasts } from './Toast/toast-store.ts';
 
 const setup = () => ({ store: new BuilderStore(), toasts: new ToastStore() });
 
@@ -62,4 +65,22 @@ test('toasts are capped, and dismiss is idempotent', () => {
   assert.deepEqual(toasts.getSnapshot().map(t => t.message), ['t2', 't3', 't4']);
   toasts.dismiss(ids[3]); toasts.dismiss(ids[3]);
   assert.deepEqual(toasts.getSnapshot().map(t => t.message), ['t2', 't3']);
+});
+test('recovering a draft offers Undo restoring the previous gym and its history',async()=>{
+  const values=new Map<string,string>();
+  const memory={getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v);}};
+  const repo=new LocalConfigStorage(memory),original=new BuilderStore(memory);await original.ready;
+  await original.saveGym('Current gym');
+  original.commit(resizeAssembly(original.getSnapshot().doc,{width:725}));await original.flushStorage();
+  const before=original.checkpoint();
+  const collection=await repo.read();await repo.write({...collection,draft:resizeAssembly(before.doc,{width:425}),draftTimeline:undefined});
+  const store=new BuilderStore(memory);await store.ready;
+  sharedToasts.clear();await recoverDraftWithUndo(store);
+  assert.equal(store.getSnapshot().doc.rack.width,425);
+  assert.equal(store.getSnapshot().activeId,null);
+  sharedToasts.getSnapshot()[0].undo!();
+  assert.deepEqual(store.getSnapshot().doc,before.doc);
+  assert.equal(store.getSnapshot().activeId,before.activeId);
+  assert.equal(store.getSnapshot().canUndo,true);
+  await store.flushStorage();sharedToasts.clear();
 });

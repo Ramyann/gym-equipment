@@ -50,6 +50,7 @@ export const GALLERY_CATEGORIES: readonly { label: string; sections: readonly st
   { label: 'Cable attachments', sections: ['Cable attachments'] },
   { label: 'Accessories', sections: ['Accessories', 'Hanging accessories'] },
   { label: 'Room decor', sections: ['Room decor', 'Wall decor'] },
+  { label: 'Custom templates', sections: ['Custom templates'] },
 ];
 
 export type GalleryKind = 'system' | 'structure' | 'rack' | 'floor' | 'wall' | 'hang';
@@ -93,7 +94,8 @@ export function specLine(id: PartId, definition?: GalleryDefinition): string {
   const floor = floorPart(id);
   if (floor) {
     const box = resolveBy(floor.footprint, floor.defaults), options = optionCount(floor.params, floor.defaults);
-    return `${mm(box.width)} × ${mm(box.depth)} mm${options > 1 ? ` · ${options} options` : ''}`;
+    // Parametric parts (templates, sized decor) have millions of combinations: say what that means instead.
+    return `${mm(box.width)} × ${mm(box.depth)} mm${options > 9999 ? ' · adjustable size' : options > 1 ? ` · ${options} options` : ''}`;
   }
   const wall = wallPart(id);
   if (wall) { const face = wallFace(wall, wall.defaults); return `${mm(face.width)} × ${mm(face.height)} mm wall face`; }

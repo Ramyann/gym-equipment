@@ -11,7 +11,7 @@ export const RackPresets = memo(function RackPresets({store}:{store:BuilderStore
   const [choice,setChoice] = useState(RACK_PRESETS.find(p => !p.featured)!.id);
   const apply = (id:string) => {
     if (store.getSnapshot().dirty && !window.confirm('Replace your unsaved working rack with this starting point? You can undo this change.')) return;
-    store.act(() => { store.endGesture(); store.commit(applyPreset(id), { category: "preset", label: RACK_PRESETS.find(p => p.id === id)?.label ?? id, replacement: true }); store.select(null); });
+    store.act(() => { store.endGesture(); store.commit({ ...applyPreset(id), room: store.getSnapshot().doc.room }, { category: "preset", label: RACK_PRESETS.find(p => p.id === id)?.label ?? id, replacement: true }); store.select(null); });
   };
   const button = (p: RackPreset) => <button type="button" key={p.id} data-preset={p.id} onClick={() => apply(p.id)}>{p.label}</button>;
   return <details className="rack-presets" open><summary>Rack starting points</summary>

@@ -582,7 +582,7 @@ export function createBuilderScene(
   }
   function showMounts() {
     clearMounts();
-    mountPoints = snapshot.placing ? placementMounts(snapshot.doc, snapshot.placing.part, snapshot.placing.movingId) : [];
+    mountPoints = snapshot.placing ? placementMounts(snapshot.doc, snapshot.placing.part, snapshot.placing.movingId, store.placementParams()) : [];
     const dots = new THREE.InstancedMesh(
         overlay.mountDot,
         overlay.mount,

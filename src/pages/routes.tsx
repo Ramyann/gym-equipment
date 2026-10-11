@@ -8,20 +8,25 @@ import {
 } from "@tanstack/react-router";
 /** Pages load lazily so the route table stays importable (and testable) without their CSS or workers. */
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: lazyRouteComponent(() => import('./WorkspaceShell.tsx')),
   notFoundComponent: () => (
     <main>
       <h1>Page not found</h1>
-      <Link to="/">Open rack builder</Link>
+      <Link to="/">Open your workspace</Link>
     </main>
   ),
 });
 export const routeTree = rootRoute.addChildren([
   createRoute({
     getParentRoute: () => rootRoute,
+    path: '/account',
+    component: lazyRouteComponent(() => import('./AccountPage.tsx')),
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
     path: "/builder.html",
-    beforeLoad: () => {
-      throw redirect({ to: "/", replace: true });
+    beforeLoad: ({ search }) => {
+      throw redirect({ to: "/builder", search, replace: true });
     },
   }),
   createRoute({
@@ -34,22 +39,23 @@ export const routeTree = rootRoute.addChildren([
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/index.html",
-    beforeLoad: () => {
-      throw redirect({ to: "/", replace: true });
+    beforeLoad: ({ search }) => {
+      throw redirect({ to: Object.keys(search).length ? '/builder' : '/', search, replace: true });
     },
   }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
-    component: lazyRouteComponent(() => import("./BuilderPage.tsx")),
+    beforeLoad: ({ search }) => {
+      if (Object.keys(search).length) throw redirect({ to: '/builder', search, replace: true });
+    },
+    component: lazyRouteComponent(() => import("./DashboardPage.tsx")),
   }),
-  // Permanent alias for old bookmarks and e2e specs; search params survive the hop.
+  // The editor has its own route; home is the saved-design dashboard.
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/builder",
-    beforeLoad: ({ search }) => {
-      throw redirect({ to: "/", search, replace: true });
-    },
+    component: lazyRouteComponent(() => import("./BuilderPage.tsx")),
   }),
   // The library gallery is the part picker; a bare /parts has nothing to show.
   createRoute({
@@ -69,7 +75,7 @@ export const routeTree = rootRoute.addChildren([
     path: "/library",
     component: lazyRouteComponent(() => import("./LibraryPage.tsx")),
   }),
-  // Pre-built gym gallery (#184); "Open in builder" links to /?gym=<slug>.
+  // Pre-built gym gallery; legacy /?gym=<slug> links redirect to the editor.
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/gyms",

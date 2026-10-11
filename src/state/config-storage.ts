@@ -9,6 +9,7 @@ export interface SavedConfig {
   name: string;
   doc: RackDoc;
   timeline?: TimelineData;
+  gym?: { type: 'home' | 'commercial'; client: string; createdAt: number; updatedAt: number };
 }
 export interface ConfigCollection {
   configs: SavedConfig[];
@@ -20,6 +21,8 @@ export interface ConfigCollection {
 export interface ConfigStorage {
   read(): Promise<ConfigCollection>;
   write(value: ConfigCollection): Promise<void>;
+  /** Browser storage can commit before pagehide returns; remote adapters remain asynchronous. */
+  writeNow?(value: ConfigCollection): void;
 }
 export const CONFIG_KEY = "bos-strength-configurations-v1";
 export class LocalConfigStorage implements ConfigStorage {
@@ -66,10 +69,13 @@ export class LocalConfigStorage implements ConfigStorage {
       )
         throw new Error("Invalid configuration");
       ids.add(config.id);
+      const gym = config.gym;
+      if (gym && (!['home', 'commercial'].includes(gym.type) || typeof gym.client !== 'string' || !Number.isFinite(gym.createdAt) || !Number.isFinite(gym.updatedAt))) throw new Error('Invalid gym details');
       return {
         id: config.id,
         name: config.name,
         doc: cleanDocument(config.doc),
+        ...(gym ? { gym: { ...gym } } : {}),
         ...(config.timeline !== undefined ? { timeline: validateTimeline(config.timeline, cleanDocument(config.doc)) } : {}),
       };
     });
@@ -83,6 +89,9 @@ export class LocalConfigStorage implements ConfigStorage {
     };
   }
   async write(value: ConfigCollection) {
+    this.writeNow(value);
+  }
+  writeNow(value: ConfigCollection) {
     if (!this.storage)
       throw new Error(
         "Browser storage is unavailable. Export your design as JSON."

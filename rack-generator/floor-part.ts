@@ -22,6 +22,8 @@ export interface FloorPartSpec<Id extends string = string> {
   id: Id; /** Inspector/instance name */ name: string; /** Catalog card name */ title: string; /** Lowercase noun for UI copy and warnings */ noun: string;
   description?: string; /** Sidebar heading and library category (catalog-sections.ts) */ section?: FloorSection;
   params: readonly FloorParam[]; validate?: (params: NumericParams) => void;
+  /** Bounded procedural component fields, validated separately from inspector dimensions. */
+  validateExtraParams?: (key: string, value: unknown) => boolean;
   footprint: ByParams<FloorBox>; /** Soft use-clearance zone; warns when it overlaps the rack or another part. */ clearance?: ByParams<FloorBox>;
   /** Suggested placement: rack side and footprint gap from the rack's outer tube face (default right, 200 mm). */
   placement?: { side?: 'right' | 'left' | 'front' | 'back'; gap?: number };
@@ -37,7 +39,7 @@ export interface FloorPartSpec<Id extends string = string> {
 }
 export interface FloorPart<Id extends string = string> extends FloorPartSpec<Id> { defaults: NumericParams }
 /** The param contract shared by floor and wall parts (wall-part.ts). */
-export type ParamPart = Pick<FloorPart, 'defaults' | 'params' | 'noun' | 'validate'>;
+export type ParamPart = Pick<FloorPart, 'defaults' | 'params' | 'noun' | 'validate' | 'validateExtraParams'>;
 export function defineFloorPart<const Id extends string>(spec: FloorPartSpec<Id>): FloorPart<Id> {
   return { ...spec, defaults: Object.fromEntries(spec.params.map(p => [p.key, p.default])) };
 }
@@ -45,7 +47,7 @@ export const resolveBy = <T,>(value: ByParams<T>, params: NumericParams): T => t
 export const floorOptions = (param: FloorParam, params: NumericParams) => resolveBy(param.options, params);
 /** Strict: saved docs with unknown keys or off-list values are rejected, never coerced. */
 export function validateFloorParams(part: ParamPart, input: unknown): NumericParams {
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(k => !Object.hasOwn(part.defaults, k))) throw Error(`Invalid ${part.noun} parameters.`);
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.entries(input).some(([k,v]) => !Object.hasOwn(part.defaults, k) && !part.validateExtraParams?.(k,v))) throw Error(`Invalid ${part.noun} parameters.`);
   const params = { ...part.defaults, ...input as NumericParams };
   for (const p of part.params) if (!floorOptions(p, params).includes(params[p.key])) throw Error(`Unsupported ${part.noun} ${p.label.toLowerCase()}.`);
   part.validate?.(params);

@@ -1,5 +1,5 @@
 import { floorPart, resolveBy, validateFloorParams, type FloorBox, type FloorPart } from './floor-registry.ts';
-import type { FloorItem, RackDoc, ResolvedInstance, Vec2 } from './types.ts';
+import type { FloorItem, NumericParams, RackDoc, ResolvedInstance, Vec2 } from './types.ts';
 import { barLift, barLoadBox, barLoadParams, loadablePart, sleeveSpec, validateBarLoad } from './bar-loads.ts';
 type Bounds = { min: number[]; max: number[] };
 const entry = (part: string) => { const found = floorPart(part); if (!found) throw Error('Unknown floor item.'); return found; };
@@ -15,7 +15,7 @@ export function validateFloorItems(input: unknown, reserved: string[] = []): Flo
     if (typeof item.rotation !== 'number' || !Number.isFinite(item.rotation)) throw Error('Invalid floor rotation.');
     if (item.cradle !== undefined && (!part.parks || typeof item.cradle !== 'string' || !/^[a-z0-9:#+-]{3,300}$/.test(item.cradle))) throw Error(`Invalid ${part.noun} cradle.`);
     const params=validateFloorParams(part,item.params), plates=validateBarLoad(item.part,params,item.plates);
-    return { id:item.id, part:item.part, position:[...item.position] as Vec2, rotation:Math.atan2(Math.sin(item.rotation),Math.cos(item.rotation)), params, ...(item.cradle ? {cradle:item.cradle} : {}), ...(plates ? {plates} : {}) };
+    return { id:item.id, part:item.part, position:[...item.position] as Vec2, rotation:Math.atan2(Math.sin(item.rotation),Math.cos(item.rotation)), params, ...(item.cradle ? {cradle:item.cradle} : {}), ...(typeof item.label === 'string' && item.label.trim() ? {label:item.label.trim().slice(0,120)} : {}), ...(plates ? {plates} : {}) };
   });
   // One bar per cradle support; the cradle itself is resolved (or falls back to the floor) in resolveAssembly.
   const supports = items.flatMap(i => i.cradle?.split('+') ?? []);
@@ -27,7 +27,7 @@ export function validateFloorItems(input: unknown, reserved: string[] = []): Flo
 export function resolveFloorItems(items: FloorItem[] = []): ResolvedInstance[] {
   return items.map(item => {
     const bar=item.plates && loadablePart(item.part), lift=bar ? barLift(sleeveSpec(bar,item.params),item.plates) : 0;
-    return { id:item.id, ownerId:item.id, part:item.part, params:{...item.params,...barLoadParams(item.plates)}, position:[item.position[0],-item.position[1],lift], rotation:[0,0,item.rotation], kind:'floor-item', mount:null, mounts:[], connectedTo:[], paired:false, name:entry(item.part).name };
+    return { id:item.id, ownerId:item.id, part:item.part, params:{...item.params,...barLoadParams(item.plates)}, position:[item.position[0],-item.position[1],lift], rotation:[0,0,item.rotation], kind:'floor-item', mount:null, mounts:[], connectedTo:[], paired:false, name:entry(item.part).name, ...(item.label ? {label:item.label} : {}) };
   });
 }
 /** Local floor offset -> world floor offset for a part rotated by `rotation` (same convention as resolveFloorItems). */
@@ -86,12 +86,13 @@ export function moveFloorGroup(items: FloorItem[], position?: Vec2, rotationDelt
   items.forEach((item,i)=>{ const [x,z]=floorOffset(rotation,local[i]); item.rotation+=rotationDelta; item.position=[origin[0]+x,origin[1]+z]; });
 }
 /** Adds one unit (or a pair for `pair` parts) at `position`, else at the entry's suggested side of the rack, stepping clear of other floor items. */
-export function addFloorItem(doc: RackDoc, part: string, position?: Vec2, pair = false): RackDoc {
+export function addFloorItem(doc: RackDoc, part: string, position?: Vec2, pair = false, customParams?: NumericParams): RackDoc {
   const spec=entry(part), next=structuredClone(doc), free=(id:string)=>!(next.floorItems!.some(i=>i.id===id) || next.systems?.some(i=>i.id===id) || Object.hasOwn(next.uprights,id) || next.connections.some(i=>i.id===id) || next.accessories.some(i=>i.id===id));
   next.floorItems ??= [];
-  const unit=():FloorItem=>{ let id:string; do {id=`floor-${next.nextId++}`;} while(!free(id)); return {id,part:spec.id as FloorItem['part'],position:[0,0],rotation:0,params:{...spec.defaults}}; };
+  const params = customParams ? validateFloorParams(spec, { ...spec.defaults, ...customParams }) : spec.defaults;
+  const unit=():FloorItem=>{ let id:string; do {id=`floor-${next.nextId++}`;} while(!free(id)); return {id,part:spec.id as FloorItem['part'],position:[0,0],rotation:0,params:{...params}}; };
   const items=[unit()];
-  if(pair && spec.pair) items.push({...unit(),position:[resolveBy(spec.footprint,spec.defaults).width+spec.pair.gap,0]});
+  if(pair && spec.pair) items.push({...unit(),position:[resolveBy(spec.footprint,params).width+spec.pair.gap,0]});
   const {side='right',gap=200}=spec.placement ?? {}, rack=rackBounds(doc) ?? {min:[0,0],max:[0,0]}, mid=(b:Bounds,i:number)=>(b.min[i]+b.max[i])/2;
   const along=side==='right' || side==='left' ? 1 : 0, sign=side==='right' || side==='front' ? 1 : -1, span=items.map(floorBounds).reduce((a,b)=>({min:a.min.map((v,i)=>Math.min(v,b.min[i])),max:a.max.map((v,i)=>Math.max(v,b.max[i]))}));
   const start:Vec2=position ?? (along ? [sign>0 ? rack.max[0]+gap-span.min[0] : rack.min[0]-gap-span.max[0], mid(rack,1)-mid(span,1)] : [mid(rack,0)-mid(span,0), sign>0 ? rack.max[1]+gap-span.min[1] : rack.min[1]-gap-span.max[1]]);

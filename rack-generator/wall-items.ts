@@ -2,7 +2,7 @@ import { wallPart, wallFace } from './wall-registry.ts';
 import { resolveBy, validateFloorParams as validateParams } from './floor-part.ts';
 import { rackBounds } from './floor-items.ts';
 import { ROOM_DEFAULTS, isWallId, wallFrames, wallToFloor, type Room, type WallId, type WallOpening } from './walls.ts';
-import type { RackDoc, ResolvedInstance, Vec2, WallItem } from './types.ts';
+import type { NumericParams, RackDoc, ResolvedInstance, Vec2, WallItem } from './types.ts';
 type Rect = { min: Vec2; max: Vec2 };
 const entry = (part: string) => { const found = wallPart(part); if (!found) throw Error('Unknown wall item.'); return found; };
 export const roomOf = (doc: Pick<RackDoc, 'room'>): Room => doc.room ?? ROOM_DEFAULTS;
@@ -68,12 +68,12 @@ export function wallWarnings(doc: RackDoc) {
   return warnings;
 }
 /** Adds one item at `placement` (clamped), else on the left wall facing the rack, stepping clear of other wall items. */
-export function addWallItem(doc: RackDoc, part: string, placement?: { wall: WallId; position: Vec2 }): RackDoc {
+export function addWallItem(doc: RackDoc, part: string, placement?: { wall: WallId; position: Vec2 }, customParams?: NumericParams): RackDoc {
   const spec = entry(part), next = structuredClone(doc), room = roomOf(doc), frames = wallFrames(room);
   const taken = (id: string) => next.wallItems!.some(i => i.id === id) || !!next.floorItems?.some(i => i.id === id) || !!next.systems?.some(i => i.id === id) || Object.hasOwn(next.uprights, id) || next.connections.some(i => i.id === id) || next.accessories.some(i => i.id === id);
   next.wallItems ??= [];
   let id: string; do { id = `wall-${next.nextId++}`; } while (taken(id));
-  const item: WallItem = { id, part: spec.id as WallItem['part'], wall: 'back', position: [0, 0], params: { ...spec.defaults } };
+  const item: WallItem = { id, part: spec.id as WallItem['part'], wall: 'back', position: [0, 0], params: customParams ? validateParams(spec, { ...spec.defaults, ...customParams }) : { ...spec.defaults } };
   if (placement) { item.wall = placement.wall; item.position = clampWallPosition(room, item, placement.wall, placement.position); }
   else {
     const { width } = wallFace(spec, item.params), rack = rackBounds(doc) ?? { min: [0, 0], max: [0, 0] }, h = spec.height ?? 1500, stride = width + 100;

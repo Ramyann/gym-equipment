@@ -39,8 +39,9 @@ export function useOpenGym(store: BuilderStore, beforeOpen?: () => void) {
     const dropParam = () => {
       stopWatching();
       if (cancelled) return;
-      const { [GYM_PARAM]: _opened, ...rest } = search;
-      void navigate({ to: "/", search: rest as never, replace: true });
+      const { [GYM_PARAM]: _opened, design: _oldDesign, ...rest } = search;
+      const id = store.getSnapshot().activeId;
+      void navigate({ to: "/builder", search: { ...rest, ...(id ? { design: id } : {}) } as never, replace: true });
     };
     void (async () => {
       try {
@@ -59,7 +60,7 @@ export function useOpenGym(store: BuilderStore, beforeOpen?: () => void) {
         if (cancelled) return;
         // The link stands for the published gym: once the working document is anything else, it no longer applies.
         const opened = store.getSnapshot().doc;
-        const unsubscribe = store.subscribe(() => { if (store.getSnapshot().doc !== opened) dropParam(); });
+        const unsubscribe = store.subscribe(() => { if (store.getSnapshot().doc !== opened || store.getSnapshot().activeId !== null) dropParam(); });
         stopWatching = unsubscribe;
       } catch (error) {
         store.status(`Could not open gym: ${error instanceof Error ? error.message : String(error)}`, true);

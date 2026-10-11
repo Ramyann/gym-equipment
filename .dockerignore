@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+.env.*
+.dev.vars
+.wrangler
+.vscode
+test-results
+playwright-report
+.verification
+server-dist
+_to_delete

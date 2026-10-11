@@ -1,0 +1,72 @@
+/* "Find a part with AI" (AiPartFinder.tsx). Uses the Studio tokens in src/styles/tokens.css. */
+.ai-finder { display: grid; gap: var(--s-4, 16px); max-width: 860px; color: var(--c-text, #141517); }
+.ai-finder h2 { margin: 0 0 4px; font-size: var(--fs-lg, 20px); letter-spacing: var(--tracking-title, -.02em); }
+.ai-finder h3 { margin: 0 0 4px; font-size: var(--fs-md, 15px); overflow-wrap: anywhere; }
+.ai-finder h4 { margin: 0 0 var(--s-2, 8px); font-size: var(--fs-sm, 13px); font-weight: var(--fw-semibold, 600); }
+.ai-finder h4 small { font-weight: normal; color: var(--c-text-3, #8e9196); }
+.ai-finder p { margin: 0 0 var(--s-2, 8px); font-size: var(--fs-sm, 13px); line-height: 1.5; color: var(--c-text-2, #585b61); }
+.ai-finder ul { margin: 0; padding-left: 18px; font-size: var(--fs-sm, 13px); line-height: 1.6; }
+.ai-finder-head { display: flex; gap: var(--s-4, 16px); align-items: flex-start; justify-content: space-between; }
+.ai-card { padding: var(--s-4, 16px); border: 1px solid var(--c-line, #e7e6e2); border-radius: var(--r-md, 10px); background: var(--c-surface, #fff); }
+.ai-row { display: flex; flex-wrap: wrap; gap: var(--s-2, 8px); align-items: center; }
+.ai-lookup, .ai-key, .ai-save { display: grid; gap: 6px; }
+.ai-lookup label, .ai-label, .ai-key label, .ai-save label { font-size: var(--fs-sm, 13px); font-weight: var(--fw-medium, 500); margin-top: 6px; }
+.ai-lookup small { font-weight: normal; color: var(--c-text-3, #8e9196); }
+.ai-finder input:not([type=file]), .ai-finder select { box-sizing: border-box; width: 100%; padding: 9px 10px; font: inherit; font-size: var(--fs-sm, 13px);
+  color: inherit; border: 1px solid var(--c-line-strong, #d7d6d1); border-radius: var(--r-sm, 8px); background: var(--c-surface, #fff); }
+.ai-key .ai-row input { flex: 1 1 220px; width: auto; }
+.ai-finder input:focus-visible, .ai-finder select:focus-visible, .ai-finder button:focus-visible, .ai-button:focus-within { outline: 2px solid var(--c-accent, #1f5eff); outline-offset: 1px; }
+:is(.ai-finder, .custom-parts) :is(.ai-primary, .ai-quiet, .ai-button) { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; font: inherit; font-size: var(--fs-sm, 13px); font-weight: var(--fw-medium, 500);
+  border-radius: var(--r-sm, 8px); cursor: pointer; border: 1px solid transparent; }
+:is(.ai-finder, .custom-parts) .ai-primary { color: var(--c-on-accent, #fff); background: var(--c-accent, #1f5eff); }
+:is(.ai-finder, .custom-parts) .ai-primary:hover:not(:disabled) { background: var(--c-accent-hover, #164fe3); }
+:is(.ai-finder, .custom-parts) :is(.ai-quiet, .ai-button) { color: var(--c-text, #141517); background: var(--c-fill, #f1f0ed); }
+:is(.ai-finder, .custom-parts) :is(.ai-quiet:hover:not(:disabled), .ai-button:hover) { background: var(--c-fill-hover, #e8e7e3); }
+.ai-finder button:disabled { opacity: .5; cursor: default; }
+.ai-finder .ai-link { padding: 0 4px; font: inherit; font-size: var(--fs-sm, 13px); color: var(--c-accent, #1f5eff); background: none; border: 0; cursor: pointer; text-decoration: underline; }
+.ai-photo img { height: 56px; width: auto; border-radius: var(--r-sm, 8px); border: 1px solid var(--c-line, #e7e6e2); }
+.ai-actions { margin-top: var(--s-3, 12px); }
+.ai-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--c-text, #141517); }
+.ai-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--c-accent-soft, #1f5eff22); border-top-color: var(--c-accent, #1f5eff); animation: ai-spin .8s linear infinite; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-spinner { animation-duration: 3s; } }
+.ai-account { margin: 0; }
+.ai-account .ai-name { font-weight: var(--fw-semibold, 600); color: var(--c-text, #141517); }
+.ai-error { padding: 10px 12px; border-radius: var(--r-sm, 8px); color: var(--c-danger, #d4351c) !important; background: var(--c-danger-soft, #d4351c10); }
+.ai-review { display: grid; gap: var(--s-3, 12px); }
+.ai-summary { display: grid; grid-template-columns: 140px 1fr; gap: var(--s-4, 16px); align-items: start; }
+.ai-thumb { width: 140px; height: 110px; border-radius: var(--r-sm, 8px); background: var(--c-fill, #f1f0ed); }
+.ai-meta { color: var(--c-text-3, #8e9196) !important; font-size: var(--fs-xs, 11px) !important; }
+.ai-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs, 11px); font-weight: var(--fw-medium, 500); line-height: 18px;
+  color: var(--c-text-2, #585b61); background: var(--c-fill, #f1f0ed); text-decoration: none; white-space: nowrap; }
+.ai-ok, .ai-high { color: var(--c-ok, #10794f); background: var(--c-ok-soft, #e6f4ec); }
+.ai-warn, .ai-medium { color: var(--c-warn, #a85a00); background: var(--c-warn-soft, #fff4e0); }
+.ai-low { color: var(--c-danger, #d4351c); background: var(--c-danger-soft, #d4351c10); }
+.ai-user { color: var(--c-accent, #1f5eff); background: var(--c-accent-soft, #1f5eff12); }
+.ai-ok-text { color: var(--c-ok, #10794f); } .ai-bad-text { color: var(--c-danger, #d4351c); }
+.ai-match { border-color: var(--c-accent-line, #1f5eff47); background: var(--c-accent-soft, #1f5eff08); font-size: var(--fs-sm, 13px); }
+.ai-match ul { margin-top: 6px; }
+.ai-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm, 13px); }
+.ai-table th { text-align: left; font-weight: var(--fw-medium, 500); color: var(--c-text-3, #8e9196); padding: 4px 8px 6px 0; }
+.ai-table td { padding: 5px 8px 5px 0; border-top: 1px solid var(--c-line, #e7e6e2); vertical-align: middle; }
+.ai-params td:first-child { width: 42%; }
+.ai-params td:nth-child(2) { width: 34%; }
+.ai-num { display: flex; align-items: center; gap: 6px; color: var(--c-text-3, #8e9196); }
+.ai-finder .ai-num input:not([type=file]) { max-width: 120px; color: var(--c-text, #141517); }
+.ai-sources li { overflow-wrap: anywhere; }
+.ai-sources small { color: var(--c-text-3, #8e9196); }
+.ai-save .ai-row { margin-top: var(--s-2, 8px); }
+@media (max-width: 600px) {
+  .ai-finder-head { flex-direction: column; }
+  .ai-summary { grid-template-columns: 1fr; }
+  .ai-thumb { width: 100%; height: 160px; }
+  .ai-params td:first-child { width: auto; }
+}
+/* Custom part cards: AI provenance line. */
+.custom-part-ai { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; font-size: var(--fs-xs, 11px); color: var(--c-text-3, #8e9196); }
+.custom-part-ai details { width: 100%; }
+.custom-part-ai summary { cursor: pointer; }
+.custom-part-ai ul { margin: 4px 0 0; padding-left: 16px; }
+.custom-parts-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.ai-request { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: var(--fs-xs, 11px); }
+.custom-parts .ai-request .ai-link { padding: 0; font-size: var(--fs-xs, 11px); color: var(--c-accent, #1f5eff); background: none; border: 0; text-decoration: underline; cursor: pointer; }

@@ -20,7 +20,7 @@ function outlineOf(s: BuilderSnapshot): Outline {
   const cached = outlines.get(s.resolved);
   if (cached && cached.definitions === s.definitions) return cached.outline;
   const { byId } = galleryCatalog(s.definitions);
-  const nodes = buildOutline(s.resolved, s.doc, (part, r) => byId.get(part)?.name ?? r.name ?? part.replaceAll('-', ' '));
+  const nodes = buildOutline(s.resolved, s.doc, (part, r) => r.label ?? byId.get(part)?.name ?? r.name ?? part.replaceAll('-', ' '));
   const outline = { nodes, signature: outlineSignature(nodes), count: s.resolved.length };
   outlines.set(s.resolved, { definitions: s.definitions, outline });
   return outline;
