@@ -30,7 +30,12 @@ Local startup: run `npm run dev` here and `npm run dev` in the Desktop `gym-stud
 (or `npm run dev:studio` here). Open `http://127.0.0.1:5173/account`. No database installation or AI key is
 needed for the labelled equipment demo. The backend stores local data persistently and provides a recovery-email
 inbox at `http://127.0.0.1:8788/dev/inbox`. Real photo recognition uses a server-side OpenRouter or Anthropic key.
-See [MVP implementation and launch checklist](docs/mvp-plan.md).
+The full MVP implementation and launch checklist lives in `gym-studio-backend/docs/mvp-plan.md`.
+
+The frontend owns the UI and equipment models; `gym-studio-backend` owns the API. After changing model definitions,
+run `npm run backend:sync` here. `npm run backend:check` detects shared-contract drift, and `npm run test:studio`
+checks the contracts, frontend workspace and separate backend together. Sync preserves backend source and local data.
+See [repository layout](docs/repository-layout.md) for what belongs in each project.
 
 The equipment library supports searching the catalog, creating equipment from shape templates, editing parameters,
 and saving named custom equipment. Saved equipment can be edited, duplicated, deleted with Undo, and added to a

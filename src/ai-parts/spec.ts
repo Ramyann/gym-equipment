@@ -3,7 +3,7 @@
  * The AI never draws geometry. It identifies the product, finds published measurements with sources, and fills one
  * parametric template (rack-generator/floor-parts/templates.ts). This module turns that answer into a saved custom part
  * and checks it: every value is snapped to the template's options, validated, and the built envelope is compared with
- * the product's published overall size. Shared by the Worker (server/) and the UI; no DOM or Node APIs. */
+ * the product's published overall size. Shared by the separate backend and UI; no DOM or Node APIs. */
 import { PARTS, TEMPLATE_IDS, TEMPLATE_COLORS, templateEnvelope, isTemplate, type TemplateId } from '../../rack-generator/floor-parts/templates.ts';
 import { coerceFloorParams, floorOptions, validateFloorParams } from '../../rack-generator/floor-part.ts';
 import type { NumericParams } from '../../rack-generator/types.ts';

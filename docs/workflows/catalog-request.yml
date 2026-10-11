@@ -1,5 +1,5 @@
 # Step 2 of the AI part lookup: an admin's "Request full catalog part" opens an issue labelled `catalog-request`
-# (server/index.ts). Claude Code works the issue with docs/catalog-playbook.md: researches the product, models it as a
+# (gym-studio-backend/src/index.ts). Claude Code works the issue with docs/catalog-playbook.md: researches the product, models it as a
 # real catalog part with tests and thumbnails, and leaves a branch + pull request for you to review. Nothing deploys.
 #
 # Setup (once): install the Claude GitHub app on this repo (https://github.com/apps/claude), add the repository secret
