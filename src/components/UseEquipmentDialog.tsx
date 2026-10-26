@@ -1,7 +1,9 @@
+import { customFitsProject } from '../state/item-purpose.ts';
 import { workspaceStorage } from '../state/workspace-storage.ts';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { LocalConfigStorage, type SavedConfig } from '../state/config-storage.ts';
+import { projectLabel, roomsOf } from '../state/space-projects.ts';
 import { gymTime } from '../state/gym-designs.ts';
 import type { CustomPart } from '../state/custom-parts.ts';
 import { GymPreview } from './GymPreview.tsx';
@@ -13,6 +15,7 @@ export function UseEquipmentDialog({ part, close }: { part: CustomPart; close: (
   const dialog = useRef<HTMLDialogElement>(null);
   const [gyms, setGyms] = useState<SavedConfig[] | null>(null), [error, setError] = useState('');
   const navigate = useNavigate();
+  const [roomChoices,setRoomChoices] = useState<Record<string,string>>({});
   useEffect(() => {
     dialog.current?.showModal();
     let active = true;
@@ -20,12 +23,12 @@ export function UseEquipmentDialog({ part, close }: { part: CustomPart; close: (
     return () => { active = false; };
   }, []);
   return <dialog ref={dialog} className="gym-wizard equipment-destination" aria-labelledby="use-equipment-title" onCancel={close}>
-    <div className="wizard-title"><div><span className="eyebrow">USE YOUR EQUIPMENT</span><h2 id="use-equipment-title">Choose a gym</h2></div><button type="button" className="icon-button" aria-label="Close gym chooser" onClick={close}>×</button></div>
-    <p>Place “{part.name}” in a saved design. Your library version stays available for other gyms.</p>
+    <div className="wizard-title"><div><span className="eyebrow">USE YOUR EQUIPMENT</span><h2 id="use-equipment-title">Choose a space</h2></div><button type="button" className="icon-button" aria-label="Close space chooser" onClick={close}>×</button></div>
+    <p>Place “{part.name}” in a saved design. Your library version stays available for other spaces.</p>
     {error && <p role="alert">{error}</p>}
-    {!gyms && !error && <p role="status">Loading your gyms…</p>}
-    {gyms?.length === 0 && <div className="library-empty"><h3>Create your first gym</h3><p>Your equipment is saved and ready. Create a gym, then add it from My custom equipment in the builder.</p><Link to="/" onClick={close}>Open gym workspace →</Link></div>}
-    <div className="equipment-destinations">{gyms?.map(gym => <button type="button" key={gym.id} onClick={() => void navigate({ to: '/builder', search: { design: gym.id, customPart: part.id } as never })}><GymPreview doc={gym.doc} /><span><strong>{gym.name}</strong><small>{gym.gym?.type === 'commercial' ? 'Commercial gym' : 'Home gym'}{gym.gym?.client ? ` · ${gym.gym.client}` : ''}</small></span><span aria-hidden="true">→</span></button>)}</div>
+    {!gyms && !error && <p role="status">Loading your spaces…</p>}
+    {gyms?.filter(gym=>customFitsProject(part,gym.projectType??'gym')).length === 0 && <div className="library-empty"><h3>Create a matching space</h3><p>Your item is saved and ready. Choose a matching project type or change its “Use for” setting in the item editor. Create a space, then add it from My custom equipment in the builder.</p><Link to="/" onClick={close}>Open workspace →</Link></div>}
+    <div className="equipment-destinations">{gyms?.filter(gym=>customFitsProject(part,gym.projectType??'gym')).map(gym => <div key={gym.id}><label>Room in {gym.name}<select aria-label={`Room in ${gym.name}`} value={roomChoices[gym.id]??gym.activeRoomId??'main'} onChange={e=>setRoomChoices(p=>({...p,[gym.id]:e.target.value}))}>{roomsOf(gym).map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label><button type="button" onClick={() => void navigate({ to: '/builder', search: { design: gym.id, roomId: roomChoices[gym.id]??gym.activeRoomId??'main', customPart: part.id } as never })}><GymPreview doc={gym.doc} /><span><strong>{gym.name}</strong><small>{projectLabel(gym)}{gym.gym?.client ? ` · ${gym.gym.client}` : ''}</small></span><span aria-hidden="true">→</span></button></div>)}</div>
     <footer className="wizard-footer"><button type="button" className="secondary" onClick={close}>Cancel</button></footer>
   </dialog>;
 }

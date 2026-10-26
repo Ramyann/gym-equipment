@@ -1,3 +1,4 @@
+import { selectProjectType } from '../../state/project-context.ts';
 import { useState, type ReactNode } from 'react';
 import type { BuilderStore } from '../../state/builder-store.ts';
 import { shallowEqual, useStoreSelector } from '../../state/use-store.ts';
@@ -28,18 +29,19 @@ function PlacementGuide({ store }: { store: BuilderStore }) {
 }
 function GymOverview({ store, onResetRack }: { store: BuilderStore; onResetRack?: () => void }) {
   const [advanced, setAdvanced] = useState(false);
+  const household=useStoreSelector(store,selectProjectType)!=='gym';
   const summary = useStoreSelector(store, s => {
     const room = roomOf(s.doc);
     return { width: (room.left + room.right) / 1000, length: (room.back + room.front) / 1000, height: room.height / 1000, empty: !s.resolved.length };
   }, shallowEqual);
-  if (advanced) return <><button type="button" className="studio-back" onClick={() => setAdvanced(false)}>← Gym overview</button><RackInspector store={store} onResetRack={onResetRack} /></>;
+  if (advanced) return <><button type="button" className="studio-back" onClick={() => setAdvanced(false)}>← Space overview</button><RackInspector store={store} onResetRack={onResetRack} /></>;
   return <div className="gym-overview">
-    <span className="studio-eyebrow">YOUR SPACE</span><h2>Gym overview</h2>
-    <p>{summary.empty ? 'Start with your space. Add equipment to bring your gym to life.' : 'Select equipment in your gym to move it or adjust its details.'}</p>
+    <span className="studio-eyebrow">YOUR SPACE</span><h2>Space overview</h2>
+    <p>{summary.empty ? 'Start with your space. Add items to bring your space to life.' : 'Select items in your space to move it or adjust its details.'}</p>
     <div className="studio-room-summary"><strong>{summary.width.toLocaleString()} × {summary.length.toLocaleString()} m</strong><span>{(summary.width * summary.length).toLocaleString()} m² · {summary.height.toLocaleString()} m ceiling</span></div>
     <button type="button" onClick={() => store.openRoom()}>Edit room & finishes</button>
-    <div className="studio-next"><span className="studio-eyebrow">MAKE IT YOURS</span><h3>{summary.empty ? 'Your first piece of equipment' : 'Keep building your gym'}</h3><p>Browse benches, racks, weights and more. Preview an item, then add it to your space.</p><button type="button" className="primary" onClick={() => openGallery()}>+ Add equipment</button><button type="button" onClick={() => openGallery({ custom: true })}>My custom equipment</button></div>
-    <details className="studio-advanced"><summary>Advanced rack tools</summary><p>Adjust the rack frame, topology and attachment settings.</p><button type="button" onClick={() => setAdvanced(true)}>Open rack settings</button></details>
+    <div className="studio-next"><span className="studio-eyebrow">MAKE IT YOURS</span><h3>{summary.empty ? 'Your first item' : 'Keep furnishing your space'}</h3><p>{household?'Browse furniture, appliances, lighting, and decor.':'Browse racks, benches, weights, and training equipment.'} Preview an item, then add it to your space.</p><button type="button" className="primary" onClick={() => openGallery()}>+ Add item</button><button type="button" onClick={() => openGallery({ custom: true })}>My custom items</button></div>
+    {!household && <details className="studio-advanced"><summary>Advanced rack tools</summary><p>Adjust the rack frame, topology and attachment settings.</p><button type="button" onClick={() => setAdvanced(true)}>Open rack settings</button></details>}
     <p className="studio-canvas-tip">Drag to orbit · Scroll to zoom<br />Use Top view to arrange your floor plan.</p>
   </div>;
 }

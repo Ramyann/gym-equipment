@@ -31,21 +31,21 @@ export function GymSaveControls({ store, backup }: { store: BuilderStore; backup
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
-  function beginSave() { setName(config?.name ?? 'My gym'); setError(''); setNaming(true); }
+  function beginSave() { setName(config?.name ?? 'My space'); setError(''); setNaming(true); }
   return <>
     <details className="gym-save-controls" open={expanded || !!state.error} onToggle={e => setExpanded(e.currentTarget.open)}>
-      <summary aria-label={`Gym saving: ${label}`}>
+      <summary aria-label={`Project saving: ${label}`}>
         <span className="gym-save-dot" data-error={!!state.error} data-saving={saving || (!!config?.gym && state.dirty)} />
-        <strong>{config?.name ?? 'Untitled gym'}</strong><span className="gym-save-label" role="status">{label}</span><span aria-hidden="true">⌄</span>
+        <strong>{config?.name ?? 'Untitled space'}</strong><span className="gym-save-label" role="status">{label}</span><span aria-hidden="true">⌄</span>
       </summary>
       <div className="gym-save-panel">
         <CloudStatus/>
-        <p>{config?.gym ? account.session ? 'This gym and its editing history save locally and sync to your account.' : 'This gym and its editing history save automatically on this device.' : 'Save this design as a gym to add it to your dashboard and turn on autosave.'}</p>
+        <p>{config?.gym ? account.session ? 'This project and its editing history save locally and sync to your account.' : 'This project and its editing history save automatically on this device.' : 'Save this design as a project to add it to your dashboard and turn on autosave.'}</p>
         {config?.gym && !state.dirty && <small>Last saved {new Date(config.gym.updatedAt).toLocaleString()}</small>}
         {state.error && <p role="alert" className="gym-save-error">{state.error}</p>}
         {error && !naming && <p role="alert" className="gym-save-error">{error}</p>}
         <div className="gym-save-actions">
-          {state.error ? <button disabled={saving || !state.ready} onClick={() => void run(store.retryStorage)}>Retry saving</button> : config?.gym ? <button disabled={saving || !state.ready || !state.dirty} onClick={() => void run(store.retryStorage)}>Save now</button> : <button disabled={saving || !state.ready} onClick={beginSave}>Save gym</button>}
+          {state.error ? <button disabled={saving || !state.ready} onClick={() => void run(store.retryStorage)}>Retry saving</button> : config?.gym ? <button disabled={saving || !state.ready || !state.dirty} onClick={() => void run(store.retryStorage)}>Save now</button> : <button disabled={saving || !state.ready} onClick={beginSave}>Save project</button>}
           <button onClick={backup}>Download JSON backup</button>
         </div>
         {state.recovery && <div className="gym-recovery"><p>A saved draft is available. You can undo recovering it.</p><button disabled={saving} onClick={() => { recoverDraftWithUndo(store); setExpanded(false); }}>Recover draft</button></div>}
@@ -53,11 +53,11 @@ export function GymSaveControls({ store, backup }: { store: BuilderStore; backup
     </details>
     {naming && <dialog ref={dialog} className="gym-name-dialog" aria-labelledby="save-gym-title" onCancel={e => { if (busy) e.preventDefault(); else setNaming(false); }}>
       <form onSubmit={e => { e.preventDefault(); void run(async () => { await store.saveGym(name); setNaming(false); setExpanded(false); }); }}>
-        <h2 id="save-gym-title">Save your gym</h2>
-        <p>Your gym will appear on the dashboard and save automatically{account.session ? ' to your account.' : ' on this device.'}</p>
-        <label>Gym name<input value={name} maxLength={120} disabled={busy} onChange={e => setName(e.target.value)} /></label>
+        <h2 id="save-gym-title">Save your project</h2>
+        <p>Your project will appear on the dashboard and save automatically{account.session ? ' to your account.' : ' on this device.'}</p>
+        <label>Project name<input value={name} maxLength={120} disabled={busy} onChange={e => setName(e.target.value)} /></label>
         {error && <p role="alert" className="gym-save-error">{error}</p>}
-        <footer><button type="button" disabled={busy} onClick={() => setNaming(false)}>Cancel</button><button type="submit" className="primary" disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save gym'}</button></footer>
+        <footer><button type="button" disabled={busy} onClick={() => setNaming(false)}>Cancel</button><button type="submit" className="primary" disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save project'}</button></footer>
       </form>
     </dialog>}
   </>;

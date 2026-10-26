@@ -38,6 +38,10 @@ test('photo lookup tool requires generated assembly geometry instead of a stock 
   assert.ok(schema.required.includes('geometry'));
   assert.match(lookupPrompt({image:{media_type:'image/jpeg',data:'AAAA'}}),/required template is template-assembly/);
   assert.equal(schemaForLookup({query:'bench'}),PART_SPEC_SCHEMA);
+  const guide = templateGuide({image:{media_type:'image/jpeg',data:'AAAA'}});
+  assert.match(guide,/packed RGB integer/);
+  assert.ok(!guide.includes('Colours (index name)'), 'photo guidance must not expose the stock palette that conflicts with RGB components');
+  assert.ok(!guide.includes('template-bench'), 'photo guidance only describes the assembly renderer');
 });
 
 test('a fully published spec builds to its published size with high confidence', () => {

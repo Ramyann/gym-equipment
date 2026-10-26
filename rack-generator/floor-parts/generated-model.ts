@@ -36,7 +36,7 @@ export function decodeComponents(p: NumericParams): ModelComponent[] {
   });
 }
 const dimensions = (key: string, label: string, fallback: number) => ({key,label,default:fallback,options:Array.from({length:1197},(_,i) => 20+i*5),format:(v:number) => `${v} mm`});
-const part = defineFloorPart({ id:'template-assembly', name:'Photo model', title:'AI component model', noun:'model', section:'Custom templates',
+const part = defineFloorPart({ id:'template-assembly', name:'Component model', title:'Editable component model', noun:'model', section:'Custom templates',
   description:'A general assembly of boxes, cylinders, ellipsoids and hollow tubes. AI-generated components describe the visible shape of equipment or furniture without a product-specific template. Overall dimensions scale the complete assembly.',
   params:[dimensions('length','Overall length',1000),dimensions('width','Overall width',600),dimensions('height','Overall height',800)],
   validateExtraParams:componentValue, validate:p => { decodeComponents(p); }, footprint:p => ({width:p.length,depth:p.width}),

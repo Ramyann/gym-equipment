@@ -1,5 +1,6 @@
 import { cleanDocument, validateTimeline, type TimelineData } from './history.ts';
 import type { RackDoc } from "../../rack-generator/types.ts";
+import { validateProjectRooms, type ProjectRoom, type ProjectType } from './space-projects.ts';
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -9,6 +10,9 @@ export interface SavedConfig {
   name: string;
   doc: RackDoc;
   timeline?: TimelineData;
+  projectType?: ProjectType;
+  rooms?: ProjectRoom[];
+  activeRoomId?: string;
   gym?: { type: 'home' | 'commercial'; client: string; createdAt: number; updatedAt: number };
 }
 export interface ConfigCollection {
@@ -70,12 +74,16 @@ export class LocalConfigStorage implements ConfigStorage {
         throw new Error("Invalid configuration");
       ids.add(config.id);
       const gym = config.gym;
+      if (config.projectType !== undefined && !['home', 'apartment', 'gym'].includes(config.projectType)) throw Error('Invalid project type');
+      const projectRooms = validateProjectRooms(config);
       if (gym && (!['home', 'commercial'].includes(gym.type) || typeof gym.client !== 'string' || !Number.isFinite(gym.createdAt) || !Number.isFinite(gym.updatedAt))) throw new Error('Invalid gym details');
       return {
         id: config.id,
         name: config.name,
         doc: cleanDocument(config.doc),
         ...(gym ? { gym: { ...gym } } : {}),
+        ...(config.projectType ? { projectType: config.projectType } : {}),
+        ...projectRooms,
         ...(config.timeline !== undefined ? { timeline: validateTimeline(config.timeline, cleanDocument(config.doc)) } : {}),
       };
     });

@@ -1,4 +1,9 @@
+import { useWorkspaceProjectType } from '../state/project-context.ts';
+import { catalogPurpose, matchesPurpose, customFitsProject, type ItemContext } from '../state/item-purpose.ts';
 import { StudioSidebar } from '../components/StudioSidebar.tsx';
+import { FURNITURE_PRESETS, furniturePreset } from '../state/furniture-presets.ts';
+import { saveCustomPart } from '../state/custom-parts.ts';
+import { useNavigate } from '@tanstack/react-router';
 import { useAccount } from '../cloud/session.ts';
 import { useCustomParts, type CustomPart } from '../state/custom-parts.ts';
 import { UseEquipmentDialog } from '../components/UseEquipmentDialog.tsx';
@@ -85,11 +90,16 @@ function LibrarySection({ category, parts, preview }: { category: string; parts:
 }
 /** Catalog metadata loads first; visible cards request geometry thumbnails lazily. */
 export default function LibraryPage() {
+  const navigate = useNavigate();
   const account = useAccount();
   const routeSearch = useSearch({ strict: false }) as Record<string, unknown>;
   const [view, setView] = useState<'collection' | 'custom'>(() => routeSearch.view === 'custom' ? 'custom' : 'collection');
   const [usePart, setUsePart] = useState<CustomPart | null>(null);
   const custom = useCustomParts();
+  const activeType=useWorkspaceProjectType();
+  const [contextOverride,setContextOverride]=useState<ItemContext|null>(null);
+  const context=contextOverride??activeType, household=context==='home'||context==='apartment'||context==='all';
+  const visibleCustom=custom.parts.filter(p=>customFitsProject(p,context));
   const [parts, setParts] = useState<CatalogPart[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All equipment");
@@ -116,34 +126,42 @@ export default function LibraryPage() {
       worker.terminate();
     };
   }, []);
+  const contextualParts=parts.filter(p=>matchesPurpose(catalogPurpose(p.id,p.category),context));
   const categories = [
-    "All equipment",
-    ...new Set(parts.map((part) => part.category)),
+    "All equipment", ...(household?["Furniture", "Storage", "Appliances", "Lighting"]:[]),
+    ...new Set(contextualParts.map((part) => part.category)),
   ];
-  const matches = parts.filter(
+  const matches = contextualParts.filter(
     (part) =>
       (category === "All equipment" || category === part.category) &&
       `${part.name} ${part.category}`
         .toLowerCase()
         .includes(search.toLowerCase())
   );
+  const furnitureMatches = FURNITURE_PRESETS.filter(p=>household).filter(p => (category === 'All equipment' || p.category === category) && `${p.name} ${p.category}`.toLowerCase().includes(search.toLowerCase()));
+  const totalMatches = matches.length + furnitureMatches.length;
   const grouped = new Map<string, CatalogPart[]>();
   for (const part of matches) {
     const list = grouped.get(part.category);
     if (list) list.push(part); else grouped.set(part.category, [part]);
   }
   const sections = [...grouped];
+  function createFurniture(id: string) {
+    try { const part=furniturePreset(id);saveCustomPart(part);void navigate({to:'/parts/$partId',params:{partId:part.part},search:{custom:part.id} as never}); }
+    catch(e) {setError(e instanceof Error?e.message:String(e));}
+  }
   return (
     <div className="studio-dashboard studio-library"><StudioSidebar active="equipment"/>
-    <main className="studio-main library-gallery"><div className="studio-breadcrumb">Workspace <span>/</span> My equipment</div><header className="studio-heading"><div><h1>My equipment</h1><p>Find the right equipment. Make it yours. Keep it ready for your next gym.</p></div><details className="library-create-options"><summary>+ Create equipment</summary><div><p>Start with a simple shape and enter your measurements.</p>{[['template-bench','Bench'],['template-machine','Strength machine'],['template-storage','Storage rack'],['template-cardio','Cardio machine'],['template-block','Box or platform'],['template-disc','Disc, cylinder or ball']].map(([id, name]) => <Link key={id} to="/parts/$partId" params={{ partId: id }}>{name} →</Link>)}</div></details></header>
-      {view === 'collection' && <section className="library-welcome"><div><span className="eyebrow">YOUR EQUIPMENT WORKSPACE</span><h2>Build a collection that fits your space</h2><p>Choose equipment, adjust its dimensions and options, then save your own version. Reuse it in any of your gym designs.</p><button type="button" onClick={() => { setView('custom'); setSearch(''); }}>View my custom equipment →</button></div><div className="library-workflow"><span><b>1</b> Choose equipment</span><span><b>2</b> Customize & save</span><span><b>3</b> Use in your gym</span></div></section>}
-      <div className="library-tabs" role="group" aria-label="Equipment library views"><button type="button" aria-pressed={view === 'collection'} onClick={() => setView('collection')}>Equipment collection <span>{parts.length || '…'}</span></button><button type="button" aria-pressed={view === 'custom'} onClick={() => setView('custom')}>My custom equipment <span>{custom.parts.length}</span></button></div>
+    <main className="studio-main library-gallery"><div className="studio-breadcrumb">Workspace <span>/</span> My library</div><header className="studio-heading"><div><h1>My library</h1><p>Furniture, appliances, and gym equipment. Customize items for every space.</p></div><details className="library-create-options"><summary>+ Create item</summary><div><p>Start with a simple shape and enter your measurements.</p>{[['template-assembly','Component model'],['template-bench','Bench'],['template-machine','Strength machine'],['template-storage','Storage rack'],['template-cardio','Cardio machine'],['template-block','Box or platform'],['template-disc','Disc, cylinder or ball']].filter(([id])=>matchesPurpose(catalogPurpose(id),context)).map(([id, name]) => <Link key={id} to="/parts/$partId" params={{ partId: id }}>{name} →</Link>)}</div></details></header>
+      {view === 'collection' && <section className="library-welcome"><div><span className="eyebrow">YOUR ITEM WORKSPACE</span><h2>Build a collection that fits your space</h2><p>Choose an item, adjust its dimensions and options, then save your own version. Reuse it in any of your projects.</p><button type="button" onClick={() => { setView('custom'); setSearch(''); }}>View my custom equipment →</button></div><div className="library-workflow"><span><b>1</b> Choose an item</span><span><b>2</b> Customize & save</span><span><b>3</b> Use in your space</span></div></section>}
+      <div className="library-tabs" role="group" aria-label="Equipment library views"><button type="button" aria-pressed={view === 'collection'} onClick={() => setView('collection')}>Item collection <span>{contextualParts.length + (household?FURNITURE_PRESETS.length:0)}</span></button><button type="button" aria-pressed={view === 'custom'} onClick={() => setView('custom')}>My custom items <span>{visibleCustom.length}</span></button></div>
+      <div className="library-context"><label>Items for<select aria-label="Items for" value={context} onChange={e=>{setContextOverride(e.target.value as ItemContext);setCategory('All equipment');setSearch('');}}><option value="home">Home</option><option value="apartment">Apartment</option><option value="gym">Gym</option><option value="all">All project types</option></select></label><p>{contextOverride?'Browsing your chosen collection.':'Matched to your active project.'} {household?'Furniture, appliances, and household decor.':'Training equipment and gym essentials.'}</p></div>
       <div className="gallery-filters">
         <label>
-          Search equipment
+          Search items
           <input
             type="search"
-            placeholder="Search benches, weights, racks…"
+            placeholder="Search furniture, appliances, equipment…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -160,8 +178,8 @@ export default function LibraryPage() {
           </select>
         </label>}
         <span role="status">
-          {view === 'custom' ? `${custom.parts.length} saved ${custom.parts.length === 1 ? 'item' : 'items'}` : error ||
-            (parts.length ? `${matches.length} ${matches.length === 1 ? 'item' : 'items'}` : "Loading catalog…")}
+          {view === 'custom' ? `${visibleCustom.length} saved ${visibleCustom.length === 1 ? 'item' : 'items'}` : error ||
+            (parts.length ? `${totalMatches} ${totalMatches === 1 ? 'item' : 'items'}` : "Loading catalog…")}
         </span>
         {view === 'collection' && sections.length > 1 && (
           <nav className="library-sections" aria-label="Sections">
@@ -177,16 +195,17 @@ export default function LibraryPage() {
           </nav>
         )}
       </div>
-      {view === 'custom' ? <CustomParts query={search} onAdd={setUsePart} addLabel="Use in gym" onBrowse={() => { setView('collection'); setSearch(''); }} /> : <>
+      {view === 'collection'&&household&&<section className="library-section furniture-starters" aria-label="Furniture and home essentials"><h2>Furniture & home essentials</h2><p>Start with an editable item. Adjust every shape, size, and color, then reuse it in any space. No AI needed.</p><div className="furniture-category-tabs">{['All','Furniture','Storage','Appliances','Lighting'].map(name=><button key={name} type="button" aria-pressed={category===name||(name==='All'&&category==='All equipment')} onClick={()=>setCategory(name==='All'?'All equipment':name)}>{name}</button>)}</div><div className="furniture-starter-grid">{furnitureMatches.map(p=><button key={p.id} onClick={()=>createFurniture(p.id)}><PartThumbnail part="template-assembly" params={furniturePreset(p.id,p.id).params}/><strong>{p.name}</strong><small>{p.category} · Customize →</small></button>)}</div></section>}
+      {view === 'custom' ? <CustomParts context={context} query={search} onAdd={setUsePart} addLabel="Use in space" onBrowse={() => { setView('collection'); setSearch(''); }} /> : <>
       {sections.map(([name, list]) => (
         <LibrarySection key={name} category={name} parts={list}
           preview={!search.trim() && category === "All equipment" ? (compact ? PREVIEW : 6) : Infinity} />
       ))}
-      {!matches.length && parts.length > 0 && (
-<div className="library-empty"><h2>No equipment found</h2><p>Try another name or browse the full collection.</p><button type="button" onClick={() => { setSearch(''); setCategory('All equipment'); }}>Reset search & category</button></div>
+      {!totalMatches && parts.length > 0 && (
+<div className="library-empty"><h2>No items found</h2><p>Try another name or browse the full collection.</p><button type="button" onClick={() => { setSearch(''); setCategory('All equipment'); }}>Reset search & category</button></div>
       )}
       </>}
-      <p className="library-storage-note">{account.session ? 'Custom equipment saves locally and syncs to your account.' : 'Custom equipment is saved in this browser.'} Adding it to a gym creates an independent copy.</p>
+      <p className="library-storage-note">{account.session ? 'Custom equipment saves locally and syncs to your account.' : 'Custom equipment is saved in this browser.'} Adding it to a space creates an independent copy.</p>
     </main>{usePart && <UseEquipmentDialog part={usePart} close={() => setUsePart(null)} />}</div>
   );
 }

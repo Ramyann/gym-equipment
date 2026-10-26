@@ -134,7 +134,7 @@ export function createBuilderScene(
   viewport.append(renderer.domElement);
   renderer.domElement.setAttribute(
     "aria-label",
-    "Rack assembly: drag to orbit, click a part to edit",
+    "Space design: drag to orbit, click an item to edit",
   );
   // Fingers drive the scene only: no page scroll or pinch/double-tap zoom, no iOS callout or text selection on a long-press.
   for (const [property, value] of [["touch-action", "none"], ["user-select", "none"], ["-webkit-user-select", "none"], ["-webkit-touch-callout", "none"], ["-webkit-tap-highlight-color", "transparent"]])
@@ -379,7 +379,7 @@ export function createBuilderScene(
     if (!cached(entries)) {
       store.patch({
         loading: true,
-        status: "Building your rack…",
+        status: "Building your space…",
         error: false,
         dimensions: dimensions(),
       });

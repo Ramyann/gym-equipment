@@ -1,6 +1,5 @@
-/** "Find a part with AI": name, link or photo → published measurements (with sources) → a sized template part.
- * The AI only researches; the geometry comes from a parametric template, so the saved part is exactly the size shown
- * in the review. People can correct any number before saving. See docs/ai-parts.md. */
+/** Photo/name/link → researched measurements and generated components or a stock template.
+ * Review and customize the dimensions/components before saving. See docs/ai-parts.md. */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { PARTS, isTemplate } from '../../rack-generator/floor-parts/templates.ts';
 import { floorOptions } from '../../rack-generator/floor-part.ts';

@@ -3,7 +3,7 @@ import { ROOM_DEFAULTS } from '../../rack-generator/walls.ts';
 import { floorBounds } from '../../rack-generator/floor-items.ts';
 export function GymPreview({ doc }: { doc: RackDoc }) {
   const r = doc.room ?? ROOM_DEFAULTS, w = r.left + r.right, h = r.back + r.front, pad = Math.max(w, h) * .09;
-  return <svg className="gym-preview" viewBox={`${-r.left-pad} ${-r.back-pad} ${w+2*pad} ${h+2*pad}`} role="img" aria-label="Top-down preview of your gym">
+  return <svg className="gym-preview" viewBox={`${-r.left-pad} ${-r.back-pad} ${w+2*pad} ${h+2*pad}`} role="img" aria-label="Top-down preview of your room">
     <rect x={-r.left} y={-r.back} width={w} height={h} fill="#e8ede4" stroke="#7f9284" strokeWidth={Math.max(w,h)*.012} />
     {Array.from({length: 9}, (_, i) => <path key={i} d={`M ${-r.left+w*(i+1)/10} ${-r.back} v ${h} M ${-r.left} ${-r.back+h*(i+1)/10} h ${w}`} stroke="#d5dfd2" strokeWidth={Math.max(w,h)*.0015} />)}
     {doc.connections.filter(e=>!doc.removed.includes(e.id)&&!doc.removed.includes(e.from)&&!doc.removed.includes(e.to)).map(e=><line key={e.id} x1={doc.uprights[e.from].x} y1={-doc.uprights[e.from].y} x2={doc.uprights[e.to].x} y2={-doc.uprights[e.to].y} stroke="#425e4b" strokeWidth={doc.rack.tube} />)}

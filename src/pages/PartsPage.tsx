@@ -1,4 +1,6 @@
+import { customPurpose, type ItemPurpose } from '../state/item-purpose.ts';
 import { findCustomPart, saveCustomPart, type CustomPart } from '../state/custom-parts.ts';
+import { ComponentEditor } from '../components/ComponentEditor.tsx';
 import '../components/custom-parts.css';
 import { UseEquipmentDialog } from '../components/UseEquipmentDialog.tsx';
 import { hasVendorParameter, VendorParameter } from '../components/VendorParameter.tsx';
@@ -38,6 +40,7 @@ export default function PartsPage() {
   const searchParams = useSearch({ strict: false }) as Record<string, unknown>;
   const customId = typeof searchParams.custom === 'string' ? searchParams.custom : null;
   const [usePart, setUsePart] = useState<CustomPart | null>(null);
+  const [purpose,setPurpose]=useState<ItemPurpose>('any');
   const [customName, setCustomName] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -113,8 +116,9 @@ export default function PartsPage() {
         if (preset?.part === def.id) values.current.set(def.id, { ...def.defaults, ...preset.params });
         loadedPreset.current = customId;
         setSavedId(preset?.part === def.id ? preset.id : null);
+        setPurpose(customPurpose(preset??{name:def.name,part:def.id as CustomPart['part']}));
         setCustomName(preset?.part === def.id ? preset.name : def.name.replace(/^BOS STRENGTH\s*/, ''));
-        setSaveMessage(previous => preset?.part === def.id ? previous || 'Saved in My custom equipment.' : customId && !preset ? 'This custom part could not be found.' : '');
+        setSaveMessage(previous => preset?.part === def.id ? previous || 'Saved in My custom items.' : customId && !preset ? 'This custom part could not be found.' : '');
         select(def);
       }
       return;
@@ -342,30 +346,31 @@ export default function PartsPage() {
           try {
             const id = savedId ?? crypto.randomUUID();
             saveCustomPart({ ...(savedId ? findCustomPart(savedId) : undefined), id, name: customName, part: selected.id as import('../../rack-generator/types.ts').PartId,
-              params: { ...currentParams.current }, defaults: { ...selected.defaults } });
+              purpose, params: { ...currentParams.current }, defaults: { ...selected.defaults } });
             setSavedId(id);
             void navigate({ to: '/parts/$partId', params: { partId }, search: { custom: id } as never, replace: true });
-            setSaveMessage(`Saved ${customName.trim()} to My custom equipment.`);
+            setSaveMessage(`Saved ${customName.trim()} to My custom items.`);
           } catch (error) { setSaveMessage(error instanceof Error ? error.message : 'Could not save custom part.'); }
         }}>
-          <label htmlFor="custom-part-name">Equipment name</label>
+          <label htmlFor="custom-part-name">Item name</label>
           <input id="custom-part-name" value={customName} maxLength={120} required onChange={event => setCustomName(event.target.value)} />
+          <label>Use for<select aria-label="Use for" value={purpose} onChange={e=>setPurpose(e.target.value as ItemPurpose)}><option value="home">Homes & apartments</option><option value="gym">Gyms</option><option value="any">All spaces</option></select></label>
           <button type="submit" disabled={!valid || !customName.trim()}>{savedId ? 'Save changes' : 'Save to my equipment'}</button>
           {savedId && <button type="button" disabled={!valid || !customName.trim()} onClick={() => {
             try {
               const id = crypto.randomUUID();
               saveCustomPart({ ...(savedId ? findCustomPart(savedId) : undefined), id, name: customName, part: selected!.id as import('../../rack-generator/types.ts').PartId,
-                params: { ...currentParams.current }, defaults: { ...selected!.defaults } });
+                purpose, params: { ...currentParams.current }, defaults: { ...selected!.defaults } });
               setSavedId(id); void navigate({ to: '/parts/$partId', params: { partId }, search: { custom: id } as never, replace: true }); setSaveMessage('Saved a new copy of this custom part.');
             } catch (error) { setSaveMessage(String(error)); }
           }}>Save as new copy</button>}
           <button type="button" className="primary" disabled={!valid || !customName.trim()} onClick={() => {
             if (!selected) return;
             try {
-              const preset: CustomPart = { ...(savedId ? findCustomPart(savedId) : undefined), id: savedId ?? crypto.randomUUID(), name: customName.trim(), part: selected.id as CustomPart['part'], params: { ...currentParams.current }, defaults: { ...selected.defaults } };
-              saveCustomPart(preset); setSavedId(preset.id); setUsePart(preset); void navigate({ to: '/parts/$partId', params: { partId }, search: { custom: preset.id } as never, replace: true }); setSaveMessage('Saved to My custom equipment.');
+              const preset: CustomPart = { ...(savedId ? findCustomPart(savedId) : undefined), id: savedId ?? crypto.randomUUID(), name: customName.trim(), part: selected.id as CustomPart['part'], purpose, params: { ...currentParams.current }, defaults: { ...selected.defaults } };
+              saveCustomPart(preset); setSavedId(preset.id); setUsePart(preset); void navigate({ to: '/parts/$partId', params: { partId }, search: { custom: preset.id } as never, replace: true }); setSaveMessage('Saved to My custom items.');
             } catch (e) { setSaveMessage(String(e)); }
-          }}>Save & use in gym</button>
+          }}>Save & use in space</button>
           <p>Adjust the settings, give your equipment a name, then save it to reuse later.</p>
           {saveMessage && <p role="status">{saveMessage}</p>}
         </form>
@@ -466,13 +471,13 @@ export default function PartsPage() {
           onClick={() => setSheet(open => !open)}
         >
           <span className="sheet-grip" aria-hidden="true" />
-          <span>Customize equipment</span>
-          <small>{Object.keys(params).length || ""} {Object.keys(params).length === 1 ? "setting" : Object.keys(params).length ? "settings" : ""}</small>
+          <span>Customize item</span>
+          <small>{selected?.id === "template-assembly" ? `${params.count ?? 1} shapes` : `${Object.keys(params).length} settings`}</small>
           <span className="sheet-chevron" aria-hidden="true">⌃</span>
         </button>
         <div id="editor-body" className="editor-body">
         <div className="section-title">
-          <span>Customize equipment</span>
+          <span>Customize item</span>
           <small>MILLIMETRES / DEGREES</small>
         </div>
         <details className="equipment-info"><summary>About this equipment</summary>{selected && <VendorCredit part={selected.id} />}{selected?.description && <p id="part-note">{selected.description}</p>}</details>
@@ -486,7 +491,7 @@ export default function PartsPage() {
           }}
         >
           <div id="fields" className="fields">
-            {Object.entries(params).map(([key, value]) => (
+            {Object.entries(params).filter(([key])=>selected?.id!=='template-assembly'||['length','width','height'].includes(key)).map(([key, value]) => (
               <label key={key}>
                 {labelOf(key)}
                 {selected && hasVendorParameter(selected.id,key) ? <VendorParameter name={key} label={labelOf(key)} value={value} defaultValue={selected.defaults[key]} onValue={next=>changeParam(key,next)}/> : <div className="input-wrap">
@@ -503,6 +508,7 @@ export default function PartsPage() {
               </label>
             ))}
           </div>
+          {selected?.id==='template-assembly'&&<ComponentEditor params={params} onChange={next=>{setParams(next);build(selected,next);}}/>}
           <button className="primary" type="submit" disabled={!selected}>
             Update preview <span>↗</span>
           </button>

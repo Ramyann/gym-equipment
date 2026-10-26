@@ -11,7 +11,9 @@ Design a squat rack, then the whole gym around it, in the browser. Every part is
 
 ## Studio workspace
 
-The home page is now your gym dashboard. Create a home or commercial gym in three steps: name it, set room
+Space Studio now supports homes, apartments, and gyms: furnished starters, multiple rooms, editable furniture, doors/windows, materials, a combined 2D floor plan, and whole-project backup/import. See [the Space Studio guide](docs/space-planner.md) for the complete local workflow and current limits.
+
+The home page is your project dashboard. Create a home or commercial gym in three steps: name it, set room
 dimensions in meters or feet, and choose an empty room or a strength starter. New gyms open at `/builder?design=<id>`
 and autosave their document and editing history in this browser. Existing saved configurations appear on the dashboard
 too. Search, rename, duplicate, delete, and undo the latest deletion from the design cards.

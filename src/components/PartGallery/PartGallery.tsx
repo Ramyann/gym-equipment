@@ -1,3 +1,6 @@
+import { selectProjectType } from '../../state/project-context.ts';
+import { catalogPurpose, matchesPurpose, customFitsProject } from '../../state/item-purpose.ts';
+import { FURNITURE_PRESETS, furniturePreset } from '../../state/furniture-presets.ts';
 import { Link } from '@tanstack/react-router';
 import { CustomParts } from '../CustomParts.tsx';
 import { useCustomParts } from '../../state/custom-parts.ts';
@@ -36,7 +39,7 @@ export const PartGallery = memo(function PartGallery({ store }: { store: Builder
 export const GalleryLauncher = memo(function GalleryLauncher({ total = CATALOG_PART_IDS.length }: { total?: number }) {
   return <button type="button" id="open-gallery" className="gallery-launch"  aria-haspopup="dialog" aria-keyshortcuts={ariaKeys('open-gallery')} onClick={() => openGallery()}>
     <span className="gallery-launch-plus" aria-hidden="true">+</span>
-    <span><strong>Add equipment</strong><small>Explore {total} items</small></span>
+    <span><strong>Add item</strong><small>Explore {total} items</small></span>
     <kbd aria-hidden="true">/</kbd>
   </button>;
 });
@@ -54,6 +57,8 @@ interface CardActions {
 function GalleryDialog({ store }: { store: BuilderStore }) {
   const initial = useRef(galleryView.get()).current;
   const [customView, setCustomView] = useState(initial.custom ?? false);
+  const projectType=useStoreSelector(store,selectProjectType), household=projectType !== 'gym';
+  const [furnitureView,setFurnitureView]=useState(household && !initial.custom);
   const customParts = useCustomParts();
   const customStatus = useStoreSelector(store, s => s.status);
   const definitions = useStoreSelector(store, selectDefinitions);
@@ -63,7 +68,7 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
   const [scope, setScopeState] = useState<GalleryScope>(initial.scope);
   const [query, setQuery] = useState(initial.query);
   const [brands, setBrands] = useState<readonly string[]>(initial.brands);
-  const [fitsOnly, setFitsOnly] = useState(initial.fitsOnly);
+  const [fitsOnly, setFitsOnly] = useState(household?false:initial.fitsOnly);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [allBrands, setAllBrands] = useState(false);
   const deferredQuery = useDeferredValue(query);
@@ -71,7 +76,8 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
   const view = useRef({ scope, query, brands, fitsOnly });
   view.current = { scope, query, brands, fitsOnly };
 
-  const { items, defaults } = galleryCatalog(definitions);
+  const catalog=galleryCatalog(definitions), defaults=catalog.defaults;
+  const items=useMemo(()=>catalog.items.filter(p=>matchesPurpose(catalogPurpose(p.id,p.category),projectType)),[catalog,projectType]);
   const fit = useMemo(() => rackFits(rack), [rack]);
   const tree = useMemo(() => categoryTree(items), [items]);
   const scoped = useMemo(() => scopeItems(items, scope, prefs), [items, scope, prefs]);
@@ -149,8 +155,8 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
     <div className="pg-panel" role="dialog" aria-modal="true" aria-labelledby="pg-title">
       <header className="pg-header">
         <div className="pg-heading">
-          <span className="pg-eyebrow">STUDIO COLLECTION · {items.length} items</span>
-          <h2 id="pg-title">Find your equipment</h2>
+          <span className="pg-eyebrow">{household?'HOME COLLECTION':'GYM COLLECTION'} · {items.length + (household?FURNITURE_PRESETS.length:0)} items</span>
+          <h2 id="pg-title">Find items for your space</h2>
         </div>
         <label className="pg-search">
           <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" /><path d="m11 11 3.5 3.5" /></svg>
@@ -161,29 +167,30 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
       </header>
       <nav className="pg-nav" aria-label="Equipment categories">
         <ul>
-          <NavItem label="My custom equipment" count={customParts.parts.length} current={customView} onSelect={() => setCustomView(true)} />
-          <NavItem label="All equipment" count={items.length} current={!customView && scope.kind === 'all'} onSelect={() => { setCustomView(false); setScope({ kind: 'all' }); }} />
-          <NavItem label="Recent" count={prefs.recent.length} current={!customView && scope.kind === 'recent'} onSelect={() => { setCustomView(false); setScope({ kind: 'recent' }); }} icon="↺" />
-          <NavItem label="Favourites" count={prefs.favourites.length} current={!customView && scope.kind === 'favourites'} onSelect={() => { setCustomView(false); setScope({ kind: 'favourites' }); }} icon="★" />
+          {household && <NavItem label="Furniture & home essentials" count={FURNITURE_PRESETS.length} current={furnitureView} onSelect={()=>{setFurnitureView(true);setCustomView(false);}} />}
+          <NavItem label="My custom items" count={customParts.parts.filter(p=>customFitsProject(p,projectType)).length} current={customView} onSelect={() => {setFurnitureView(false);setCustomView(true);}} />
+          <NavItem label={household?"Decor & basic shapes":"Gym equipment"} count={items.length} current={!customView && !furnitureView && scope.kind === 'all'} onSelect={() => { setFurnitureView(false); setCustomView(false); setScope({ kind: 'all' }); }} />
+          <NavItem label="Recent" count={prefs.recent.filter(id=>items.some(p=>p.id===id)).length} current={!customView && !furnitureView && scope.kind === 'recent'} onSelect={() => { setFurnitureView(false); setCustomView(false); setScope({ kind: 'recent' }); }} icon="↺" />
+          <NavItem label="Favourites" count={prefs.favourites.filter(id=>items.some(p=>p.id===id)).length} current={!customView && !furnitureView && scope.kind === 'favourites'} onSelect={() => { setFurnitureView(false); setCustomView(false); setScope({ kind: 'favourites' }); }} icon="★" />
         </ul>
         <ul className="pg-categories">
           {tree.map(category => {
-            const open = !customView && scope.kind === 'category' && scope.category === category.label;
+            const open = !customView && !furnitureView && scope.kind === 'category' && scope.category === category.label;
             return <NavItem key={category.label} label={category.label} count={category.count} current={open && !scope.section}
-              expanded={category.sections.length > 1 ? open : undefined} onSelect={() => { setCustomView(false); setScope({ kind: 'category', category: category.label }); }}>
+              expanded={category.sections.length > 1 ? open : undefined} onSelect={() => { setFurnitureView(false); setCustomView(false); setScope({ kind: 'category', category: category.label }); }}>
               {open && category.sections.length > 1 && <ul className="pg-sections">
                 {category.sections.map(section => <NavItem key={section.label} label={section.label} count={section.count}
                   current={scope.kind === 'category' && scope.section === section.label}
-                  onSelect={() => { setCustomView(false); setScope({ kind: 'category', category: category.label, section: section.label }); }} />)}
+                  onSelect={() => { setFurnitureView(false); setCustomView(false); setScope({ kind: 'category', category: category.label, section: section.label }); }} />)}
               </ul>}
             </NavItem>;
           })}
         </ul>
       </nav>
-      {customView ? <div id="custom-parts-results" className="pg-custom-results"><Link className="studio-library-link" to="/library" onClick={() => close()}>+ Customize or add your own equipment ↗</Link><CustomParts query={query} onUseCatalog={id => actions.add(id)} onAdd={preset => {
+      {furnitureView ? <section className="pg-main" aria-label="Furniture results"><h3>Furniture & home essentials</h3><p>Choose an item to place it. Edit its shapes in the builder, or save a reusable version in your library.</p><div className="pg-furniture-grid">{FURNITURE_PRESETS.filter(p=>`${p.name} ${p.category}`.toLowerCase().includes(query.toLowerCase())).map(p=><button key={p.id} type="button" onClick={()=>{if(store.startCustomPlacement(furniturePreset(p.id)))close();}}><PartThumbnail part="template-assembly" params={furniturePreset(p.id,p.id).params}/><span>{p.name}</span><small>{p.category} · Add to space +</small></button>)}</div><Link to="/library" onClick={()=>close()}>Customize items in my library →</Link></section> : customView ? <div id="custom-parts-results" className="pg-custom-results"><Link className="studio-library-link" to="/library" onClick={() => close()}>+ Customize or add your own equipment ↗</Link><CustomParts context={projectType} query={query} onUseCatalog={id => actions.add(id)} onAdd={preset => {
         if (store.startCustomPlacement(preset)) close();
       }} /><p className="pg-status" role="status">{customStatus}</p></div> : <section className="pg-main" aria-label="Results">
-        <p className="pg-instructions">Select equipment to preview it, then add it to your gym.</p>
+        <p className="pg-instructions">Select equipment to preview it, then add it to your space.</p>
         <details className="pg-filter-disclosure"><summary>Filters{brands.length + Number(fitsOnly) > 0 ? ` · ${brands.length + Number(fitsOnly)} active` : ''}</summary><div className="pg-filters">
           <div className="pg-brands">
             <div className={`pg-chips${allBrands ? ' pg-chips-all' : ''}`} role="group" aria-label="Brands">
@@ -207,7 +214,7 @@ function GalleryDialog({ store }: { store: BuilderStore }) {
           fit={fit} defaults={defaults} thumbs={definitions.length > 0} resetKey={`${JSON.stringify(scope)}|${deferredQuery}|${brands.join()}|${fitsOnly}`} />
           : <EmptyState scope={scope} query={deferredQuery} onAll={() => { setScope({ kind: 'all' }); setQuery(''); setFitsOnly(false); }} />}
       </section>}
-      {!customView && active && <GalleryDetail item={active} definition={defaults.get(active.id)} fit={fit(active.id)} favourite={favourites.has(active.id)} rack={rack} thumbs={definitions.length > 0} store={store} close={close} />}
+      {!customView && !furnitureView && active && <GalleryDetail item={active} definition={defaults.get(active.id)} fit={fit(active.id)} favourite={favourites.has(active.id)} rack={rack} thumbs={definitions.length > 0} store={store} close={close} />}
     </div>
   </div>;
 }

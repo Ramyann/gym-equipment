@@ -1,3 +1,5 @@
+import { selectProjectType } from '../../state/project-context.ts';
+import { catalogPurpose, matchesPurpose } from '../../state/item-purpose.ts';
 /** Command palette (#206): ⌘K / Ctrl-K (or the toolbar's search button) opens a searchable list of every editor
  * action and every catalog part. Keyboard first: type, ↑/↓, Enter; Escape closes. An ARIA combobox driving a
  * listbox; a centred dialog on desktop and a full-screen sheet on phones. Mounted only while open. */
@@ -29,14 +31,15 @@ function Keycaps({ entry }: { entry: PaletteEntry }) {
 
 function PaletteDialog({ api }: { api: EditorApi }) {
   const { store } = api;
+  const projectType=useStoreSelector(store,selectProjectType);
   const definitions = useStoreSelector(store, selectDefinitions);
   const gallery = useGalleryPrefs();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null), list = useRef<HTMLDivElement>(null);
   // Availability is read when the palette opens and on each keystroke; the palette never subscribes to edits.
-  const commands = useMemo(() => availableCommands(store.getSnapshot(), store).map(commandEntry), [store]);
-  const parts = useMemo(() => partEntries(galleryCatalog(definitions).items), [definitions]);
+  const commands = useMemo(() => availableCommands(store.getSnapshot(), store).filter(c=>projectType==='gym'||!['reset-rack','gyms'].includes(c.id)).map(commandEntry), [store,projectType]);
+  const parts = useMemo(() => partEntries(galleryCatalog(definitions).items.filter(p=>matchesPurpose(catalogPurpose(p.id,p.category),projectType))), [definitions,projectType]);
   const defaults = useMemo(() => galleryCatalog(definitions).defaults, [definitions]);
   const sections = useMemo(() => rankPalette(query, commands, parts, mergedRecents(recents(), gallery.recent)), [query, commands, parts, gallery.recent]);
   const entries = useMemo(() => sections.flatMap(s => s.entries), [sections]);

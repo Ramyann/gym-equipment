@@ -25,7 +25,7 @@ self.onmessage = async ({ data }: MessageEvent<LibraryWorkerRequest>) => {
   let parts: SolidPart[] = [];
   try {
     const def = definitions.find((d) => d.id === data.part);
-    if (!def) throw new Error("Unknown part");
+    if (!def) throw new Error("This item is not available in the catalog. Reload the page and try again.");
     const params = { ...def.defaults, ...data.params }, floor = floorPart(data.part) ?? wallPart(data.part) ?? hangPart(data.part);
     // Floor, wall and hang parts carry their own option lists (negative/zero values allowed where listed).
     const rack = rackPart(data.part);

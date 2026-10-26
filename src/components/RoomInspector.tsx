@@ -67,6 +67,7 @@ export function RoomInspector({ store }: { store: BuilderStore }) {
     <InspectorHeader store={store} title="Room" chip="Scenery" art={<span className="insp-room-art" aria-hidden="true" />}
       subtitle={<span className="insp-brand">{Math.round(room.left + room.right)} × {Math.round(room.back + room.front)} mm · {Math.round(room.height)} mm ceiling</span>} />
     <div id="inspector" className="insp-body inspector-fields room-inspector">
+      <Section id="room-openings" title="Doors & windows"><p className="note">Choose an opening, click a wall, then confirm its placement. Select it later to change its size or position.</p><div className="opening-actions"><button type="button" onClick={()=>store.startPlacement('decor-interior-door')}>+ Add door</button><button type="button" onClick={()=>store.startPlacement('decor-window')}>+ Add window</button></div></Section>
       <Section id="room-walls" title="Walls" badge={WALL_FINISH_LABELS[walls?.finish ?? 'slat']}>
         <label className="field"><span>Edit</span>
           <select aria-label="Walls to edit" value={target} onChange={e => setTarget(e.target.value as 'all' | WallId)}>

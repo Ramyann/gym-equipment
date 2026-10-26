@@ -1,7 +1,7 @@
 /** AI part lookup: the contract between the AI researcher (server) and the builder (browser).
  *
- * The AI never draws geometry. It identifies the product, finds published measurements with sources, and fills one
- * parametric template (rack-generator/floor-parts/templates.ts). This module turns that answer into a saved custom part
+ * The AI identifies products, researches measurements, and describes photo geometry as bounded components or fills
+ * a stock parametric template. This module turns that answer into a saved custom part
  * and checks it: every value is snapped to the template's options, validated, and the built envelope is compared with
  * the product's published overall size. Shared by the separate backend and UI; no DOM or Node APIs. */
 import { PARTS, TEMPLATE_IDS, TEMPLATE_COLORS, templateEnvelope, isTemplate, type TemplateId } from '../../rack-generator/floor-parts/templates.ts';
@@ -40,7 +40,7 @@ export const PART_SPEC_SCHEMA = {
     template: { type: 'string', enum: TEMPLATE_IDS },
     geometry: { type:'array', items:{type:'object',additionalProperties:false,required:['name','shape','position','size','rotation','color'],properties:{
       name:{type:'string'},shape:{type:'string',enum:SHAPES},position:{type:'array',items:{type:'number'},minItems:3,maxItems:3},
-      size:{type:'array',items:{type:'number'},minItems:3,maxItems:3},rotation:{type:'array',items:{type:'number'},minItems:3,maxItems:3},color:{type:'integer'},
+      size:{type:'array',items:{type:'number'},minItems:3,maxItems:3},rotation:{type:'array',items:{type:'number'},minItems:3,maxItems:3},color:{type:'integer',description:'Packed 24-bit RGB integer, red*65536 + green*256 + blue. Not a template palette index. For example oak #C49A6C = 12884588; black = 0; white = 16777215.'},
     }}},
     params: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['key', 'value', 'basis', 'source_url', 'note'], properties: {
       key: { type: 'string', enum: ALL_KEYS }, value: { type: 'number' }, basis: { type: 'string', enum: BASES }, source_url: { type: 'string' }, note: { type: 'string' },
@@ -62,7 +62,8 @@ export function schemaForLookup(req: LookupRequest) {
 }
 
 /** The template catalogue as prompt text, generated from the registry so it never drifts from the builders. */
-export function templateGuide(): string {
+export function templateGuide(req: LookupRequest = {}): string {
+  if (req.image) return '\nPhoto assembly: use only template-assembly. Overall length, width and height are millimetres along X, Y, Z. geometry.color is a packed RGB integer (R*65536 + G*256 + B), never a stock-template colour index. Match visible materials and colours from the image. Example oak #C49A6C is 12884588. Use separate components for visible panels, supports and legs, preserving empty space. Do not infer a solid box around the full object.\n';
   const colors = TEMPLATE_COLORS.map(([name], i) => `${i} ${name}`).join(', ');
   const blocks = PARTS.map(part => {
     const lines = part.params.map(p => {

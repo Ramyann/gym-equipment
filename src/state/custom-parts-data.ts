@@ -9,6 +9,7 @@ export interface CustomPart {
   params: NumericParams;
   defaults: NumericParams;
   ai?: AiProvenance;
+  purpose?: 'home' | 'gym' | 'any';
 }
 export const CUSTOM_PARTS_KEY = 'bos-strength-custom-parts-v1';
 const numeric = (value: unknown): value is NumericParams => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -22,6 +23,7 @@ export function readCustomParts(storage: StorageLike): CustomPart[] {
   return data.parts.map((p: CustomPart) => {
     if (!p || typeof p.id !== 'string' || ids.has(p.id) || typeof p.name !== 'string' || !p.name.trim()
       || typeof p.part !== 'string' || !numeric(p.params) || !numeric(p.defaults)) throw Error('Invalid saved custom part.');
+    if(p.purpose !== undefined && !['home','gym','any'].includes(p.purpose)) throw Error('Invalid item purpose.');
     ids.add(p.id);
     if (p.part === 'template-assembly') decodeComponents(p.params);
     return p;
@@ -29,6 +31,7 @@ export function readCustomParts(storage: StorageLike): CustomPart[] {
 }
 export function writeCustomPart(storage: StorageLike, part: CustomPart): CustomPart[] {
   if (!part.name.trim() || !numeric(part.params) || !numeric(part.defaults)) throw Error('Enter a name and valid parameters.');
+  if(part.purpose !== undefined && !['home','gym','any'].includes(part.purpose)) throw Error('Invalid item purpose.');
   if (part.part === 'template-assembly') decodeComponents(part.params);
   const parts = readCustomParts(storage), index = parts.findIndex(p => p.id === part.id);
   // Edits in the part viewer keep the AI lookup's provenance (product, sources, how each number was found).

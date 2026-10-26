@@ -233,3 +233,5 @@
   .pg-fit small { display: none; }
 }
 /* Short landscape phones: the builder shell (MobileShell/mobile-shell.css, #203) owns that layout. */
+
+.pg-furniture-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;padding:16px 0}.pg-furniture-grid button{display:grid;gap:8px;padding:12px;background:white;border:1px solid #d5ddd3;border-radius:12px;color:#325c43;text-align:left}.pg-furniture-grid .part-thumbnail{height:120px}.pg-furniture-grid small{font-size:11px}

@@ -5,14 +5,17 @@ import { customizeProposal } from './custom-placement.ts';
 import { DocumentHistory, cleanDocument, diffDocuments, applyOps, parseSession, describeChange, sameValue, type TimelineData, type TimelineSnapshot, type HistoryMetadata, type HistoryMark, type HistoryEntry, type SessionDocument } from './history.ts';
 import { systemProposal } from '../../rack-generator/system-proposal.ts';
 import { isSystemPart, SYSTEM_DEFAULTS, type SystemPartId } from '../../rack-generator/system-types.ts';
-import { addFloorItem, resolveFloorItems, floorWarnings, moveFloorGroup } from '../../rack-generator/floor-items.ts';
+import { addFloorItem, resolveFloorItems, floorWarnings, moveFloorGroup, floorBounds } from '../../rack-generator/floor-items.ts';
 import { floorPart, isFloorPart } from '../../rack-generator/floor-registry.ts';
+import { validateFloorParams } from '../../rack-generator/floor-part.ts';
 import { barSpecOf, freeCradles, parkedParams, parkedPose, parksInCradles, settleBarbells, suggestCradle, type BarCradle } from '../../rack-generator/barbell-cradles.ts';
 import { addWallItem, resolveWallItems, wallWarnings, clampWallPosition, roomOf } from '../../rack-generator/wall-items.ts';
 import { isWallPart } from '../../rack-generator/wall-registry.ts';
 import { isHangPart } from '../../rack-generator/hang-registry.ts';
 import { freeSlots, placeHang, reslotHangs, resolveHangItems, type HangTarget } from '../../rack-generator/hang-items.ts';
 import { ROOM_DEFAULTS, type Room, type WallId } from '../../rack-generator/walls.ts';
+import { checkpointRoom, roomsOf, type ProjectRoom } from './space-projects.ts';
+import { createGym } from './gym-designs.ts';
 import { FINISH_KEYS, type RoomFinishes } from '../../rack-generator/room-finishes.ts';
 import { resetAppearanceField } from '../../rack-generator/appearance-reset.ts';
 import type { FrameFinish } from '../../rack-generator/appearance.ts';
@@ -374,7 +377,7 @@ export class BuilderStore {
       this.draftQueued = false;
       const dirty = this.isDirty();
       const active = current.configs.find(c => c.id === this.state.activeId);
-      if (active?.gym) return dirty ? { ...current, activeId: active.id, configs: current.configs.map(c => c.id === active.id ? { ...c, doc: cleanDocument(this.committedDoc()), timeline: structuredClone(this.journal.data), gym: { ...active.gym!, updatedAt: Date.now() } } : c) } : current;
+      if (active && (active.gym || active.rooms)) return dirty ? { ...current, activeId: active.id, configs: current.configs.map(c => c.id === active.id ? { ...checkpointRoom(c, cleanDocument(this.committedDoc()), structuredClone(this.journal.data)), ...(active.gym ? { gym: { ...active.gym, updatedAt: Date.now() } } : {}) } : c) } : current;
       return { ...current, draft: dirty ? this.committedDoc() : null, draftTimeline: dirty ? structuredClone(this.journal.data) : undefined };
     }).then(() => this.patch({ dirty: this.isDirty() })).catch(() => {
       this.draftQueued = false;
@@ -392,7 +395,7 @@ export class BuilderStore {
       const previous = current.configs.find(c => c.id === this.state.activeId);
       const now = Date.now();
       const gym = previous?.gym ?? (asGym ? { type: 'home' as const, client: '', createdAt: now, updatedAt: now } : undefined);
-      const config = { id, name: name.trim(), doc, timeline, ...(gym ? { gym: { ...gym, updatedAt: now, ...(duplicate ? { createdAt: now } : {}) } } : {}) };
+      const config = { ...checkpointRoom(previous ?? { id, name: name.trim(), doc }, doc, timeline), id, name: name.trim(), ...(gym ? { gym: { ...gym, updatedAt: now, ...(duplicate ? { createdAt: now } : {}) } } : {}) };
       const preserveDraft = !!previous?.gym || (asGym && !!current.draft && !sameValue(current.draft, doc));
       return {
         configs: [...current.configs.filter((c) => c.id !== id), config],
@@ -412,6 +415,68 @@ export class BuilderStore {
   };
   /** Save an imported, template, or recovered design as an autosaving dashboard gym. */
   saveGym = (name: string) => this.save(name, false, true);
+  /** Flush edits before changing rooms so each room keeps its own geometry and history. */
+  switchRoom = async (roomId: string) => {
+    this.endGesture();
+    await this.flushStorage();
+    if (this.state.storageError) throw Error(this.state.storageError);
+    const saved = this.collection.configs.find(c => c.id === this.state.activeId);
+    const current = saved ? checkpointRoom(saved, cleanDocument(this.committedDoc()), structuredClone(this.journal.data)) : undefined;
+    if (!current) throw Error('Save this project before managing rooms.');
+    const rooms = roomsOf(current), target = rooms.find(r => r.id === roomId);
+    if (!target) throw Error('Room not found.');
+    await this.mutateStorage(c => ({ ...c, configs: c.configs.map(p => p.id === current.id ? { ...p, rooms, activeRoomId: roomId, doc: target.doc, timeline: target.timeline } : p) }));
+    this.replaceWorking(target.doc, target.timeline);
+    this.openRoom();
+  };
+  addProjectRoom = async (name: string, width: number, length: number, height: number) => {
+    await this.flushStorage();
+    if (this.state.storageError) throw Error(this.state.storageError);
+    const saved = this.collection.configs.find(c => c.id === this.state.activeId);
+    const project = saved ? checkpointRoom(saved, cleanDocument(this.committedDoc()), structuredClone(this.journal.data)) : undefined;
+    if (!project) throw Error('Save this project before adding a room.');
+    const rooms = roomsOf(project);
+    if (rooms.length >= 30) throw Error('A project supports up to 30 rooms.');
+    if (!name.trim() || name.trim().length > 80) throw Error('Use a room name of 1–80 characters.');
+    const doc = createGym({ name, type: 'home', client: '', width, length, height, starter: 'empty' }).doc;
+    doc.room = { ...doc.room!, walls: { finish: 'drywall', color: '#f2f1ec' }, floor: 'concrete' };
+    const edge = Math.max(...rooms.map(r => r.position[0] + (r.doc.room?.right ?? ROOM_DEFAULTS.right)));
+    const room: ProjectRoom = { id: crypto.randomUUID(), name: name.trim(), position: [edge + width / 2, 0], doc };
+    if (room.position[0] > 100000) throw Error('Move existing rooms closer before adding another room.');
+    await this.mutateStorage(c => ({ ...c, configs: c.configs.map(p => p.id === project.id ? { ...p, rooms: [...rooms, room], activeRoomId: room.id, doc, timeline: undefined, gym: p.gym ? { ...p.gym, updatedAt: Date.now() } : undefined } : p) }));
+    this.replaceWorking(doc);
+    this.openRoom();
+  };
+  updateProjectRoom = async (id: string, name: string, position: [number, number]) => {
+    if (!name.trim() || name.trim().length > 80 || !position.every(v => Number.isFinite(v) && Math.abs(v) <= 100000)) throw Error('Enter a room name and a position within 100 m.');
+    await this.flushStorage();
+    if (this.state.storageError) throw Error(this.state.storageError);
+    await this.mutateStorage(c => ({ ...c, configs: c.configs.map(p => p.id === this.state.activeId ? { ...p, rooms: roomsOf(p).map(r => r.id === id ? { ...r, name: name.trim(), position } : r), activeRoomId: p.activeRoomId ?? 'main' } : p) }));
+  };
+  removeProjectRoom = async (id: string) => {
+    await this.flushStorage();
+    if (this.state.storageError) throw Error(this.state.storageError);
+    const saved = this.collection.configs.find(c => c.id === this.state.activeId);
+    const project = saved ? checkpointRoom(saved, cleanDocument(this.committedDoc()), structuredClone(this.journal.data)) : undefined;
+    if (!project) throw Error('Project not found.');
+    const rooms = roomsOf(project).filter(r => r.id !== id);
+    if (!rooms.length) throw Error('Keep at least one room.');
+    const activeRoomId = project.activeRoomId === id ? rooms[0].id : project.activeRoomId ?? 'main';
+    const target = rooms.find(r => r.id === activeRoomId)!;
+    await this.mutateStorage(c => ({ ...c, configs: c.configs.map(p => p.id === project.id ? { ...p, rooms, activeRoomId, doc: target.doc, timeline: target.timeline } : p) }));
+    this.replaceWorking(target.doc, target.timeline);
+    this.openRoom();
+  };
+  restoreProjectRoom = async (room: ProjectRoom) => {
+    await this.flushStorage();
+    if (this.state.storageError) throw Error(this.state.storageError);
+    await this.mutateStorage(c => ({ ...c, configs: c.configs.map(p => {
+      if (p.id !== this.state.activeId) return p;
+      const rooms=roomsOf(p);
+      if (rooms.length>=30||rooms.some(r=>r.id===room.id)) throw Error('This room cannot be restored.');
+      return { ...p, rooms:[...rooms,structuredClone(room)],activeRoomId:p.activeRoomId??'main' };
+    }) }));
+  };
   load = async (id: string) => {
     await this.flushStorage();
     const config = this.collection.configs.find((c) => c.id === id);
@@ -467,7 +532,7 @@ export class BuilderStore {
       inputRevision: this.state.inputRevision + 1, doc, resolved: resolveAssembly(doc),
       timeline: this.journal.snapshot(this.journal.data.applied),
       selection: [], selectionAnchor: null, selectionTool: false, selected: null, hidden: [], locked: [],
-      placing: null, structureChoice: null, structureMoveId: null, dirty: false,
+      placing: null, systemChoice: null, structureChoice: null, structureMoveId: null, dirty: false,
       canUndo: this.journal.data.applied > 0, canRedo: !!this.journal.data.redo.length,
     });
   }
@@ -849,7 +914,9 @@ export class BuilderStore {
     try {
       const definition = this.state.definitions.find(d => d.id === preset.part);
       if (!definition) throw Error('This part is unavailable. Wait for the catalog to load.');
-      if (Object.keys(preset.params).some(key => !Object.hasOwn(definition.defaults, key))) throw Error('This preset contains unsupported settings. Edit it in the library.');
+      const floor = floorPart(preset.part);
+      if (floor) validateFloorParams(floor, preset.params);
+      else if (Object.keys(preset.params).some(key => !Object.hasOwn(definition.defaults, key))) throw Error('This preset contains unsupported settings. Edit it in the library.');
       this.cancelPlacement();
       this.startPlacement(preset.part, null, undefined, preset);
       if (this.state.systemChoice) {
@@ -921,6 +988,12 @@ export class BuilderStore {
     const items = movingId ? doc.floorItems!.filter(i=>i.id===movingId) : doc.floorItems!.slice(this.state.doc.floorItems?.length ?? 0);
     const parks = parksInCradles(part), cradle = parks && !movingId ? suggestCradle(freeCradles(this.state.resolved, doc.floorItems, items[0].id)) : null;
     if (cradle) this.parkItem(items[0], cradle);
+    if (!movingId && !cradle && doc.room) {
+      const bounds=items.map(floorBounds), min=[0,1].map(i=>Math.min(...bounds.map(b=>b.min[i]))), max=[0,1].map(i=>Math.max(...bounds.map(b=>b.max[i])));
+      const low=[-doc.room.left,-doc.room.back], high=[doc.room.right,doc.room.front];
+      const shift=[0,1].map(i=>max[i]-min[i]<=high[i]-low[i]?Math.max(low[i]-min[i],Math.min(0,high[i]-max[i])):0);
+      if(shift.some(v=>v!==0)) moveFloorGroup(items,[items[0].position[0]+shift[0],items[0].position[1]+shift[1]]);
+    }
     const ids = items.map(i => i.id), entries = items.some(i => i.cradle) ? resolveAssembly(doc).filter(e => ids.includes(e.id)) : resolveFloorItems(items);
     return { proposal:{doc,entries,ownerId:items[0].id,label:parks ? 'Park barbell' : 'Floor placement'}, placementText:parks ? `${cradle ? `Suggested: ${cradle.label} · ` : ''}Click a highlighted cradle or the floor · ESC cancels` : 'Click floor to place · R rotates · Alt disables snap' };
   }

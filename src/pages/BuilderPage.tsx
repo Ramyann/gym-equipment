@@ -1,4 +1,9 @@
+import { selectProjectType } from '../state/project-context.ts';
+import { catalogPurpose, matchesPurpose } from '../state/item-purpose.ts';
+import { galleryCatalog } from '../components/PartGallery/gallery-state.ts';
+import { FURNITURE_PRESETS, furniturePreset } from '../state/furniture-presets.ts';
 import { HistoryTimeline } from '../components/HistoryTimeline.tsx';
+import { ProjectWorkspace } from '../components/ProjectWorkspace.tsx';
 import { CommandPalette } from '../components/CommandPalette/CommandPalette.tsx';
 import { builderShortcutHandlers, type EditorApi } from '../components/CommandPalette/commands.ts';
 import { ShortcutsOverlay } from '../components/ShortcutsOverlay/ShortcutsOverlay.tsx';
@@ -149,24 +154,26 @@ function PairControl({ store }: { store: BuilderStore }) {
 /** The compact parts sidebar (#183): the gallery launcher, pairing, favourites and recent parts, rack starters and
  * category shortcuts. The full catalog lives in the parts gallery (components/PartGallery). */
 const CatalogPanel = memo(function CatalogPanel({ store }: { store: BuilderStore }) {
+  const projectType=useStoreSelector(store,selectProjectType), household=projectType !== 'gym';
   return (
     <aside className="catalog-panel" data-sheet-panel="parts">
       <div className="panel-heading">
-        <h1>Equipment</h1><p>Everything your gym needs.</p>
+        <h1>Furnish your space</h1><p>{household?'Furniture, appliances, lighting, and decor.':'Racks, benches, weights, and training equipment.'}</p>
 
       </div>
-      <GalleryLauncher />
-      <button type="button" className="studio-custom-launch" onClick={() => openGallery({ custom: true })}>My custom equipment ↗</button>
-      <PairControl store={store} />
+      {household && <details className="studio-furniture"><summary>Furniture & home essentials</summary><div>{FURNITURE_PRESETS.map(p=><button key={p.id} type="button" onClick={()=>store.startCustomPlacement(furniturePreset(p.id))}>{p.name} +</button>)}</div><Link to="/library">Customize in my library →</Link></details>}
+      <ContextGalleryLauncher store={store} projectType={projectType} />
+      <button type="button" className="studio-custom-launch" onClick={() => openGallery({ custom: true })}>My custom items ↗</button>
+      {!household && <PairControl store={store} />}
       <div id="catalog">
-        <SystemPlacementOptions store={store} />
+        {!household && <SystemPlacementOptions store={store} />}
         <CompactCatalog store={store} />
-        <details className="studio-browse"><summary>Browse by category</summary><BrowseCategories /></details>
-        <details className="studio-advanced"><summary>Rack starting points</summary><p>Replaces the current rack and equipment layout. You can undo this change.</p><RackPresets store={store} /></details>
+        <details className="studio-browse"><summary>Browse by category</summary><BrowseCategories projectType={projectType} /></details>
+        {!household && <details className="studio-advanced"><summary>Rack starting points</summary><p>Replaces the current rack and equipment layout. You can undo this change.</p><RackPresets store={store} /></details>}
       </div>
       <div className="catalog-footer">
-        <Link to="/library">Customize equipment ↗</Link>
-        <Link to="/gyms">Gym templates ↗</Link>
+        <Link to="/library">Customize items ↗</Link>
+        {!household && <Link to="/gyms">Gym templates ↗</Link>}
       </div>
     </aside>
   );
@@ -248,17 +255,21 @@ function useFloatingPanelInsets(shell: RefObject<HTMLDivElement | null>, viewpor
 }
 /** Phone sheet tabs (see components/MobileShell). */
 const SHEET_TABS: readonly SheetTab[] = [
-  { id: "parts", label: "Equipment", icon: TAB_ICONS.parts },
+  { id: "parts", label: "Items", icon: TAB_ICONS.parts },
   { id: "inspector", label: "Edit", icon: TAB_ICONS.inspector },
   { id: "timeline", label: "History", icon: TAB_ICONS.timeline },
   { id: "room", label: "Room", panel: "inspector", icon: TAB_ICONS.room },
   { id: "outliner", label: "Items", icon: TAB_ICONS.outliner },
 ];
+function ContextGalleryLauncher({store,projectType}:{store:BuilderStore;projectType:ReturnType<typeof selectProjectType>}) {
+  const count=useStoreSelector(store,s=>galleryCatalog(s.definitions).items.filter(p=>matchesPurpose(catalogPurpose(p.id,p.category),projectType)).length);
+  return <GalleryLauncher total={count+(projectType==='gym'?0:FURNITURE_PRESETS.length)} />;
+}
 function StageCaption({ store }: { store: BuilderStore }) {
   const { viewing, dimensions } = useStoreSelector(store, s => { const room = roomOf(s.doc); return { viewing: s.timeline.viewing, dimensions: `${(room.left + room.right) / 1000} × ${(room.back + room.front) / 1000} m · ${room.height / 1000} m ceiling` }; }, shallowEqual);
   return (
     <div className="stage-caption">
-      <span className="eyebrow">{viewing ? "Viewing history · edits apply to latest" : "Your gym"}</span>
+      <span className="eyebrow">{viewing ? "Viewing history · edits apply to latest" : "Your space"}</span>
       <div id="dimensions">{dimensions}</div>
     </div>
   );
@@ -334,11 +345,14 @@ function LibraryEquipmentHandoff({ store }: { store: BuilderStore }) {
     const id = typeof search.customPart === 'string' ? search.customPart : null;
     if (!id || !ready.storage || !ready.catalog || (search.design && ready.id !== search.design) || handled.current === id) return;
     handled.current = id;
-    const preset = findCustomPart(id);
-    if (preset) store.startCustomPlacement(preset);
-    else store.status('This custom equipment could not be found. Open My custom equipment to choose another item.');
-    const { customPart: _consumed, ...rest } = search;
-    void navigate({ to: '/builder', search: rest as never, replace: true });
+    void (async()=>{
+      if (typeof search.roomId==='string') await store.switchRoom(search.roomId);
+      const preset = findCustomPart(id);
+      if (preset) store.startCustomPlacement(preset);
+      else store.status('This custom item could not be found. Open My custom items to choose another item.');
+      const { customPart: _consumed, roomId: _room, ...rest } = search;
+      await navigate({ to: '/builder', search: rest as never, replace: true });
+    })().catch(e=>store.status(String(e),true));
   }, [store, ready.storage, ready.catalog, ready.id, search, navigate]);
   return null;
 }
@@ -409,11 +423,12 @@ export default function BuilderPage() {
     <div className="builder-page" data-layout={layout}>
       <div className="builder-shell" ref={shell}>
         <header className="toolbar">
-          <Link className="brand" to="/" aria-label="Return to gym workspace" onClick={e=>{e.preventDefault();void store.flushStorage().then(()=>{if(!store.getSnapshot().storageError)void navigate({to:'/'});});}}>
+          <Link className="brand" to="/" aria-label="Return to workspace" onClick={e=>{e.preventDefault();void store.flushStorage().then(()=>{if(!store.getSnapshot().storageError)void navigate({to:'/'});});}}>
             <span className="brand-symbol" aria-hidden="true"><i /><i /><i /></span>
-            GYM STUDIO<small>← WORKSPACE</small>
+            SPACE STUDIO<small>← WORKSPACE</small>
           </Link>
           <GymHeading store={store} />
+          <ProjectWorkspace store={store} fit={()=>controller.current?.fit(view)} />
           <div className="toolbar-actions">
             {/* Toolbar actions slot (#203): components that belong in the top bar at every size. */}
             <div className="toolbar-slot" data-slot="toolbar-actions">
@@ -424,13 +439,13 @@ export default function BuilderPage() {
               </button>
             </div>
             <HistoryButtons store={store} />
-            <button type="button" className="toolbar-add primary" aria-haspopup="dialog" aria-label="Add equipment" onClick={() => openGallery()}>
+            <button type="button" className="toolbar-add primary" aria-haspopup="dialog" aria-label="Add item" onClick={() => openGallery()}>
               {/* The narrowest phones show "+ Add" (#215). */}
-              <span aria-hidden="true">+</span><span className="toolbar-add-label">Add<span className="toolbar-add-noun"> equipment</span></span>
+              <span aria-hidden="true">+</span><span className="toolbar-add-label">Add<span className="toolbar-add-noun"> item</span></span>
             </button>
             <OverflowMenu>
               {/* Studio: every secondary action lives in this one menu at every size. */}
-              <Link className="gyms-link" to="/gyms" data-menu-close>Gym gallery</Link>
+              <Link className="gyms-link" to="/gyms" data-menu-close>Templates</Link>
               <Link className="menu-only" to="/library" data-menu-close>Parts library ↗</Link>
               <span className="menu-divider" role="separator" />
               <ConfigManager store={store} />

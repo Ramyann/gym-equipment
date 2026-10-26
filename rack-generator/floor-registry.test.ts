@@ -13,7 +13,9 @@ test('every registered floor part is complete: catalog builder, valid defaults, 
   const def=definitions.find(d=>d.id===part.id)!;
   assert.equal(def.name,part.title);assert.deepEqual(def.defaults,part.defaults);assert.ok(isFloorPart(part.id));
   assert.deepEqual(validateFloorParams(part,{}),part.defaults);
-  assert.ok(part.params.length===Object.keys(part.defaults).length && /^[a-z][a-z ]*$/.test(part.noun),part.id);
+  const declared=new Set(part.params.map(p=>p.key));
+  assert.ok(part.params.every(p=>Object.hasOwn(part.defaults,p.key)) && /^[a-z][a-z ]*$/.test(part.noun),part.id);
+  for(const [key,value] of Object.entries(part.defaults)) assert.ok(declared.has(key)||part.validateExtraParams?.(key,value),`${part.id}: undeclared default ${key}`);
   const box=resolveBy(part.footprint,part.defaults);assert.ok(box.width>0 && box.depth>0,part.id);
   assert.deepEqual(vendorAttribution(part.id),part.vendor);
  }

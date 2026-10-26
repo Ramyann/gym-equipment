@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { CUSTOM_PARTS_KEY, readCustomParts, writeCustomPart, type CustomPart } from './custom-parts.ts';
 import { BuilderStore } from './builder-store.ts';
 import { floorPart } from '../../rack-generator/floor-registry.ts';
+import { encodeComponents, TEMPLATE_ASSEMBLY } from '../../rack-generator/floor-parts/generated-model.ts';
 import { wallPart } from '../../rack-generator/wall-registry.ts';
 import { getPartDefaults } from '../../rack-generator/assembly.ts';
 import { structureCandidates } from '../../rack-generator/structure-candidates.ts';
@@ -21,6 +22,32 @@ function preset(part: PartId, changes: NumericParams = {}): CustomPart {
 function catalog(store: BuilderStore, item: CustomPart) {
   store.patch({ definitions: [{ id: item.part, name: item.part, category: 'Test', defaults: item.defaults }] });
 }
+
+test('generated multi-component equipment starts builder placement, saves, and reloads with its colours and geometry', async () => {
+  const storage = memory(), store = new BuilderStore(storage);
+  await store.ready;
+  const params = { ...TEMPLATE_ASSEMBLY.defaults, ...encodeComponents([
+    {name:'Top',shape:'box',position:[0,0,740],size:[1800,900,40],rotation:[0,0,0],color:0xc49a6c},
+    {name:'Left leg',shape:'box',position:[-800,0,360],size:[80,80,720],rotation:[0,0,0],color:0xb8895a},
+    {name:'Right leg',shape:'box',position:[800,0,360],size:[80,80,720],rotation:[0,0,0],color:0xb8895a},
+  ]) };
+  const item = preset('template-assembly', params);
+  catalog(store, { ...item, defaults: TEMPLATE_ASSEMBLY.defaults });
+  assert.equal(store.startCustomPlacement(item), true, 'component fields beyond the default single component are supported');
+  store.previewFloor([1500,1500], 0);
+  store.acceptProposal();
+  const saved = store.getSnapshot().doc.floorItems!.at(-1)!;
+  assert.equal(saved.label, item.name);
+  assert.equal(saved.params.count, 3);
+  assert.equal(saved.params.c2_color, 0xb8895a);
+  assert.equal(saved.params.c2_x, 800);
+  await store.save('Generated table gym');
+  await store.flushStorage();
+  const restored = new BuilderStore(storage);
+  await restored.ready;
+  assert.deepEqual(restored.getSnapshot().doc.floorItems!.at(-1)!.params, saved.params);
+  assert.equal(store.startCustomPlacement({...item, params:{...params,c2_color:0x1000000}}), false, 'unsafe generated fields remain rejected');
+});
 
 test('custom presets round-trip, update by ID and stay detached from caller data', () => {
   const storage = memory(), item = preset('pegboard-panel', { width: 610 });

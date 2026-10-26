@@ -9,6 +9,7 @@ import {
 /** Pages load lazily so the route table stays importable (and testable) without their CSS or workers. */
 const rootRoute = createRootRoute({
   component: lazyRouteComponent(() => import('./WorkspaceShell.tsx')),
+  errorComponent: ({reset}) => <main className="account-loading"><h1>This page could not open</h1><p>Your saved workspace has not been cleared. Retry, return to the dashboard, or open your account to review sync.</p><button onClick={reset}>Retry page</button><a href="/">Open workspace</a><a href="/account">Open account</a></main>,
   notFoundComponent: () => (
     <main>
       <h1>Page not found</h1>

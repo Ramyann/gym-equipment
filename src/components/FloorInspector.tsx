@@ -1,3 +1,4 @@
+import { ComponentEditor } from './ComponentEditor.tsx';
 import { resetAppearanceField } from '../../rack-generator/appearance-reset.ts';
 import type { BuilderSnapshot, BuilderStore } from '../state/builder-store.ts';
 import { useStoreSelector } from '../state/use-store.ts';
@@ -12,6 +13,10 @@ import { InspectorHeader } from './Inspector/InspectorHeader.tsx';
 import { Section } from './Inspector/Section.tsx';
 import { Choice, InspectorFooter, Swatches } from './Inspector/controls.tsx';
 import { removeSelectionWithUndo } from './Toast/undo-actions.ts';
+function FloorPositionControls({store,id}:{store:BuilderStore;id:string}) {
+  const position=useStoreSelector(store,s=>s.doc.floorItems!.find(i=>i.id===id)!.position,(a,b)=>a[0]===b[0]&&a[1]===b[1]);
+  return <>{['X','Y'].map((axis,i)=><label className="field" key={axis}><span>Floor position {axis} (mm)</span><NumericControl label={`Floor position ${axis}`} value={position[i]} min={-100000} max={100000} step={25} onGestureStart={store.beginGesture} onGestureEnd={store.endGesture} onValue={v=>{const p=store.getSnapshot().doc.floorItems!.find(item=>item.id===id)!.position;store.act(()=>store.updateFloor(id,{position:i===0?[v,p[1]]:[p[0],v]}));}}/></label>)}</>;
+}
 /** What the inspector shows: the item without its floor position (a drag moves it every frame), its colour and cradle. */
 function floorView(state: BuilderSnapshot, id: string) {
   const item=state.doc.floorItems!.find(i=>i.id===id)!;
@@ -35,6 +40,7 @@ export function FloorInspector({store,id}:{store:BuilderStore;id:string}) {
   };
   return <><InspectorHeader store={store} part={item.part} title={item.label} /><div id="inspector" className="insp-body inspector-fields">
     <Section id="placement" title="Placement" badge={item.cradle ? 'parked' : `${Math.round(item.rotation*180/Math.PI)}°`}>
+      {!item.cradle && <FloorPositionControls store={store} id={id}/>}
       {!item.cradle && <label className="field"><span>Rotation (degrees)</span><NumericControl label={`${Noun} rotation`} value={item.rotation*180/Math.PI} min={-180} max={180} step={15} defaultValue={0} onGestureStart={store.beginGesture} onGestureEnd={store.endGesture} onValue={v=>store.updateFloor(id,{rotation:v*Math.PI/180})}/></label>}
       {part.parks && <p className="note">{cradle ? `Parked in ${cradle}` : item.cradle ? 'Its cradle is gone — lying on the floor.' : 'On the floor · double-click to park in a cradle'}</p>}
       {item.cradle && <button type="button" onClick={()=>{const doc=structuredClone(live().doc),floor=doc.floorItems!.find(i=>i.id===id)!,at=live().resolved.find(r=>r.id===id)!;
@@ -46,6 +52,7 @@ export function FloorInspector({store,id}:{store:BuilderStore;id:string}) {
         options={floorOptions(param,item.params).map(v=>({value:v,label:format(v)}))} onChange={v=>setParams({...item.params,[key]:v})}
         reset={{changed:item.params[key] !== param.default,onReset:()=>setParams({...item.params,[key]:param.default})}} />;})}
     </Section>}
+    {item.part === 'template-assembly' && <ComponentEditor params={item.params} onChange={setParams} />}
     {part.bar && <Section id="plates" title="Plates"><BarPlatesEditor key={id} store={store} item={item} part={part} /></Section>}
     <Section id="appearance" title="Appearance" defaultOpen={false}>
       {part.colors && <Swatches label={colorLabel} colors={part.colors} value={color} onChange={paint} defaultLabel="Default / global" reset={{changed:!!color,onReset:()=>paint(undefined)}} />}

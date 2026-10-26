@@ -1,3 +1,5 @@
+import { selectProjectType } from '../../state/project-context.ts';
+import { catalogPurpose, matchesPurpose } from '../../state/item-purpose.ts';
 /** Compact sidebar catalog (#183): favourites, recent parts (or a few quick picks on a first visit) and category
  * shortcuts into the gallery. Cards keep the old sidebar behaviour: click starts placement (a second click places
  * the suggestion), drag drops into the viewport. Subscribes to the definitions and the active part only. */
@@ -15,32 +17,34 @@ const SHOWN = 8;
 
 /** Favourites and recent parts (quick picks until the first gallery add), as sidebar cards. */
 export const CompactCatalog = memo(function CompactCatalog({ store }: { store: BuilderStore }) {
+  const projectType=useStoreSelector(store,selectProjectType);
   const definitions = useStoreSelector(store, selectDefinitions);
   const activePart = useStoreSelector(store, selectActivePart);
   const prefs = useGalleryPrefs();
   const { byId, defaults } = galleryCatalog(definitions);
   useEffect(() => warmGalleryCatalog(definitions, () => store.getSnapshot().doc.rack), [definitions, store]);
-  const pick = (ids: readonly string[]) => ids.flatMap(id => byId.get(id) ?? []).slice(0, SHOWN);
+  const pick = (ids: readonly string[]) => ids.flatMap(id => byId.get(id) ?? []).filter(p=>matchesPurpose(catalogPurpose(p.id,p.category),projectType)).slice(0, SHOWN);
   const favourites = pick(prefs.favourites), recent = pick(prefs.recent.filter(id => !prefs.favourites.includes(id)));
+  const suggested=recent.length?recent:pick(QUICK_PICKS);
   const card = (item: GalleryItem) => <SidebarCard key={item.id} item={item} store={store} active={activePart === item.id}
     params={defaults.get(item.id)?.defaults} thumbs={definitions.length > 0} />;
   return <>
     {favourites.length > 0 && <section className="compact-section" aria-label="Favourite parts">
       <h3>Favourites</h3>{favourites.map(card)}
     </section>}
-    <section className="compact-section" aria-label={recent.length ? 'Recent parts' : 'Quick picks'}>
+    {suggested.length>0 && <section className="compact-section" aria-label={recent.length ? 'Recent parts' : 'Quick picks'}>
       <h3>{recent.length ? 'Recent' : 'Quick picks'}</h3>
-      {(recent.length ? recent : pick(QUICK_PICKS)).map(card)}
-    </section>
+      {suggested.map(card)}
+    </section>}
   </>;
 });
 
 /** Category shortcuts into the gallery. Static: the catalog tree never changes at runtime. */
-export const BrowseCategories = memo(function BrowseCategories() {
+export const BrowseCategories = memo(function BrowseCategories({projectType}: {projectType:import('../../state/space-projects.ts').ProjectType}) {
   const { items } = galleryCatalog(NO_DEFINITIONS);
-  const tree = useMemo(() => categoryTree(items), [items]);
+  const tree = useMemo(() => categoryTree(items.filter(p=>matchesPurpose(catalogPurpose(p.id,p.category),projectType))), [items,projectType]);
   return <section className="compact-section compact-browse" aria-label="Browse by category">
-    <h3>Equipment categories</h3>
+    <h3>{projectType==='gym'?'Equipment categories':'Item categories'}</h3>
     <ul>
       {tree.map(category => <li key={category.label}>
         <button type="button" data-category={category.label} onClick={() => openGallery({ scope: { kind: 'category', category: category.label } })}>
@@ -48,7 +52,7 @@ export const BrowseCategories = memo(function BrowseCategories() {
         </button>
       </li>)}
     </ul>
-    <button type="button" className="compact-browse-all" onClick={() => openGallery({ scope: { kind: 'all' } })}>Browse all {items.length} items ↗</button>
+    <button type="button" className="compact-browse-all" onClick={() => openGallery({ scope: { kind: 'all' } })}>Browse all {tree.reduce((total,category)=>total+category.count,0)} items ↗</button>
   </section>;
 });
 const NO_DEFINITIONS: readonly never[] = [];
